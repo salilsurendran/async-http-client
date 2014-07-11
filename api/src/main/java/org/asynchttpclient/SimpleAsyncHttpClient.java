@@ -18,6 +18,7 @@ import org.asynchttpclient.resumable.ResumableAsyncHandler;
 import org.asynchttpclient.resumable.ResumableIOExceptionFilter;
 import org.asynchttpclient.simple.HeaderMap;
 import org.asynchttpclient.simple.SimpleAHCTransferListener;
+import org.asynchttpclient.uri.UriComponents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import javax.net.ssl.SSLContext;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -282,7 +284,7 @@ public class SimpleAsyncHttpClient implements Closeable {
 
         Request request = rb.build();
         ProgressAsyncHandler<Response> handler = new BodyConsumerAsyncHandler(bodyConsumer, throwableHandler, errorDocumentBehaviour,
-                request.getUrl(), listener);
+                request.getURI(), listener);
 
         if (resumeEnabled && request.getMethod().equals("GET") && bodyConsumer != null && bodyConsumer instanceof ResumableBodyConsumer) {
             ResumableBodyConsumer fileBodyConsumer = (ResumableBodyConsumer) bodyConsumer;
@@ -365,17 +367,22 @@ public class SimpleAsyncHttpClient implements Closeable {
      *
      * @see SimpleAsyncHttpClient#derive()
      */
+    /**
+     * This interface contains possible configuration changes for a derived SimpleAsyncHttpClient.
+     *
+     * @see SimpleAsyncHttpClient#derive()
+     */
     public interface DerivedBuilder {
 
-        DerivedBuilder setFollowRedirects(boolean followRedirects);
+        DerivedBuilder setFollowRedirect(boolean followRedirect);
 
         DerivedBuilder setVirtualHost(String virtualHost);
 
         DerivedBuilder setUrl(String url);
 
-        DerivedBuilder setParameters(FluentStringsMap parameters);
+        DerivedBuilder setFormParams(List<Param> params);
 
-        DerivedBuilder setParameters(Map<String, Collection<String>> parameters);
+        DerivedBuilder setFormParams(Map<String, List<String>> params);
 
         DerivedBuilder setHeaders(Map<String, Collection<String>> headers);
 
@@ -383,9 +390,9 @@ public class SimpleAsyncHttpClient implements Closeable {
 
         DerivedBuilder setHeader(String name, String value);
 
-        DerivedBuilder addQueryParameter(String name, String value);
+        DerivedBuilder addQueryParam(String name, String value);
 
-        DerivedBuilder addParameter(String key, String value);
+        DerivedBuilder addFormParam(String key, String value);
 
         DerivedBuilder addHeader(String name, String value);
 
@@ -443,13 +450,13 @@ public class SimpleAsyncHttpClient implements Closeable {
             return this;
         }
 
-        public Builder addParameter(String key, String value) {
-            requestBuilder.addParameter(key, value);
+        public Builder addFormParam(String key, String value) {
+            requestBuilder.addFormParam(key, value);
             return this;
         }
 
-        public Builder addQueryParameter(String name, String value) {
-            requestBuilder.addQueryParameter(name, value);
+        public Builder addQueryParam(String name, String value) {
+            requestBuilder.addQueryParam(name, value);
             return this;
         }
 
@@ -468,13 +475,13 @@ public class SimpleAsyncHttpClient implements Closeable {
             return this;
         }
 
-        public Builder setParameters(Map<String, Collection<String>> parameters) {
-            requestBuilder.setParameters(parameters);
+        public Builder setFormParams(Map<String, List<String>> parameters) {
+            requestBuilder.setFormParams(parameters);
             return this;
         }
 
-        public Builder setParameters(FluentStringsMap parameters) {
-            requestBuilder.setParameters(parameters);
+        public Builder setFormParams(List<Param> params) {
+            requestBuilder.setFormParams(params);
             return this;
         }
 
@@ -488,8 +495,8 @@ public class SimpleAsyncHttpClient implements Closeable {
             return this;
         }
 
-        public Builder setFollowRedirects(boolean followRedirects) {
-            requestBuilder.setFollowRedirects(followRedirects);
+        public Builder setFollowRedirect(boolean followRedirect) {
+            requestBuilder.setFollowRedirect(followRedirect);
             return this;
         }
 
@@ -729,7 +736,7 @@ public class SimpleAsyncHttpClient implements Closeable {
         private final BodyConsumer bodyConsumer;
         private final ThrowableHandler exceptionHandler;
         private final ErrorDocumentBehaviour errorDocumentBehaviour;
-        private final String url;
+        private final UriComponents uri;
         private final SimpleAHCTransferListener listener;
 
         private boolean accumulateBody = false;
@@ -738,11 +745,11 @@ public class SimpleAsyncHttpClient implements Closeable {
         private long total = -1;
 
         public BodyConsumerAsyncHandler(BodyConsumer bodyConsumer, ThrowableHandler exceptionHandler,
-                ErrorDocumentBehaviour errorDocumentBehaviour, String url, SimpleAHCTransferListener listener) {
+                ErrorDocumentBehaviour errorDocumentBehaviour, UriComponents uri, SimpleAHCTransferListener listener) {
             this.bodyConsumer = bodyConsumer;
             this.exceptionHandler = exceptionHandler;
             this.errorDocumentBehaviour = errorDocumentBehaviour;
-            this.url = url;
+            this.uri = uri;
             this.listener = listener;
         }
 
@@ -840,13 +847,13 @@ public class SimpleAsyncHttpClient implements Closeable {
 
         @Override
         public STATE onContentWriteProgress(long amount, long current, long total) {
-            fireSent(url, amount, current, total);
+            fireSent(uri, amount, current, total);
             return super.onContentWriteProgress(amount, current, total);
         }
 
         private void fireStatus(HttpResponseStatus status) {
             if (listener != null) {
-                listener.onStatus(url, status.getStatusCode(), status.getStatusText());
+                listener.onStatus(uri, status.getStatusCode(), status.getStatusText());
             }
         }
 
@@ -856,27 +863,26 @@ public class SimpleAsyncHttpClient implements Closeable {
             amount += remaining;
 
             if (listener != null) {
-                listener.onBytesReceived(url, amount, remaining, total);
+                listener.onBytesReceived(uri, amount, remaining, total);
             }
         }
 
         private void fireHeaders(HttpResponseHeaders headers) {
             if (listener != null) {
-                listener.onHeaders(url, new HeaderMap(headers.getHeaders()));
+                listener.onHeaders(uri, new HeaderMap(headers.getHeaders()));
             }
         }
 
-        private void fireSent(String url, long amount, long current, long total) {
+        private void fireSent(UriComponents uri, long amount, long current, long total) {
             if (listener != null) {
-                listener.onBytesSent(url, amount, current, total);
+                listener.onBytesSent(uri, amount, current, total);
             }
         }
 
         private void fireCompleted(Response response) {
             if (listener != null) {
-                listener.onCompleted(url, response.getStatusCode(), response.getStatusText());
+                listener.onCompleted(uri, response.getStatusCode(), response.getStatusText());
             }
         }
     }
-
 }

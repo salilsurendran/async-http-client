@@ -12,10 +12,11 @@
  */
 package org.asynchttpclient.util;
 
-import static org.asynchttpclient.util.MiscUtil.isNonEmpty;
+import static org.asynchttpclient.util.MiscUtils.isNonEmpty;
 
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Realm;
+import org.asynchttpclient.uri.UriComponents;
 
 import java.security.NoSuchAlgorithmException;
 
@@ -31,13 +32,28 @@ public final class AuthenticatorUtils {
         return "Basic " + Base64.encode(s.getBytes(proxyServer.getCharset()));
     }
 
+    private static String computeRealmURI(Realm realm) {
+        if (realm.isTargetProxy()) {
+            return "/";
+        } else {
+            UriComponents uri = realm.getUri();
+            boolean omitQuery = realm.isOmitQuery() && MiscUtils.isNonEmpty(uri.getQuery());
+            if (realm.isUseAbsoluteURI()) {
+                return omitQuery ? uri.withNewQuery(null).toUrl() : uri.toUrl();
+            } else {
+                String path = uri.getPath();
+                return omitQuery ? path : path + "?" + uri.getQuery();
+            }
+        }
+    }
+
     public static String computeDigestAuthentication(Realm realm) throws NoSuchAlgorithmException {
 
         StringBuilder builder = new StringBuilder().append("Digest ");
         construct(builder, "username", realm.getPrincipal());
         construct(builder, "realm", realm.getRealmName());
         construct(builder, "nonce", realm.getNonce());
-        construct(builder, "uri", realm.getUri());
+        construct(builder, "uri", computeRealmURI(realm));
         builder.append("algorithm").append('=').append(realm.getAlgorithm()).append(", ");
 
         construct(builder, "response", realm.getResponse());

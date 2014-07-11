@@ -32,6 +32,7 @@ import org.asynchttpclient.providers.netty.future.NettyResponseFuture;
 import org.asynchttpclient.providers.netty.handler.Processor;
 import org.asynchttpclient.providers.netty.request.NettyRequestSender;
 import org.asynchttpclient.providers.netty.util.CleanupChannelGroup;
+import org.asynchttpclient.uri.UriComponents;
 import org.asynchttpclient.util.SslUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +64,6 @@ import javax.net.ssl.SSLEngine;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import java.util.Map;
@@ -147,7 +147,7 @@ public class Channels {
 
         ChannelPool cp = nettyProviderConfig.getChannelPool();
         if (cp == null) {
-            if (config.getAllowPoolingConnection()) {
+            if (config.isAllowPoolingConnection()) {
                 cp = new DefaultChannelPool(config, nettyTimer);
             } else {
                 cp = new NonChannelPool();
@@ -296,8 +296,8 @@ public class Channels {
         });
     }
 
-    public Bootstrap getBootstrap(String url, boolean useSSl, boolean useProxy) {
-        return (url.startsWith(WEBSOCKET) && !useProxy) ? (useSSl ? secureWebSocketBootstrap : webSocketBootstrap)
+    public Bootstrap getBootstrap(UriComponents uri, boolean useSSl, boolean useProxy) {
+        return (uri.getScheme().startsWith(WEBSOCKET) && !useProxy) ? (useSSl ? secureWebSocketBootstrap : webSocketBootstrap)
                 : (useSSl ? secureBootstrap : plainBootstrap);
     }
 
@@ -374,7 +374,7 @@ public class Channels {
         channel.pipeline().addBefore(WS_PROCESSOR, WS_DECODER_HANDLER, new WebSocket08FrameDecoder(false, false, 10 * 1024));
     }
 
-    public Channel pollAndVerifyCachedChannel(URI uri, ProxyServer proxy, ConnectionPoolKeyStrategy connectionPoolKeyStrategy) {
+    public Channel pollAndVerifyCachedChannel(UriComponents uri, ProxyServer proxy, ConnectionPoolKeyStrategy connectionPoolKeyStrategy) {
         final Channel channel = channelPool.poll(connectionPoolKeyStrategy.getKey(uri, proxy));
 
         if (channel != null) {

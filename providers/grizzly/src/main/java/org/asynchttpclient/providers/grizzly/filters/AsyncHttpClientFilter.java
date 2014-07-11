@@ -16,16 +16,15 @@ package org.asynchttpclient.providers.grizzly.filters;
 import static org.asynchttpclient.providers.grizzly.filters.SwitchingSSLFilter.getHandshakeError;
 import static org.asynchttpclient.providers.grizzly.GrizzlyAsyncHttpProvider.NTLM_ENGINE;
 import static org.asynchttpclient.util.AsyncHttpProviderUtils.getAuthority;
+import static org.asynchttpclient.util.AsyncHttpProviderUtils.getNonEmptyPath;
 import static org.asynchttpclient.util.AuthenticatorUtils.computeBasicAuthentication;
 import static org.asynchttpclient.util.AuthenticatorUtils.computeDigestAuthentication;
-import static org.asynchttpclient.util.MiscUtil.isNonEmpty;
-
+import static org.asynchttpclient.util.MiscUtils.isNonEmpty;
 
 import org.asynchttpclient.AsyncCompletionHandler;
 import org.asynchttpclient.AsyncHandler;
 import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.FluentCaseInsensitiveStringsMap;
-import org.asynchttpclient.FluentStringsMap;
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Realm;
 import org.asynchttpclient.Request;
@@ -45,7 +44,7 @@ import org.asynchttpclient.providers.grizzly.bodyhandler.ExpectHandler;
 import org.asynchttpclient.providers.grizzly.filters.events.ContinueEvent;
 import org.asynchttpclient.providers.grizzly.filters.events.SSLSwitchingEvent;
 import org.asynchttpclient.providers.grizzly.filters.events.TunnelRequestEvent;
-import org.asynchttpclient.util.StandardCharsets;
+import org.asynchttpclient.uri.UriComponents;
 import org.glassfish.grizzly.Buffer;
 import org.glassfish.grizzly.Connection;
 import org.glassfish.grizzly.Grizzly;
@@ -74,10 +73,8 @@ import org.glassfish.grizzly.websockets.Version;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -158,7 +155,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
             ctx.suspend();
             TunnelRequestEvent tunnelRequestEvent = (TunnelRequestEvent) event;
             final ProxyServer proxyServer = tunnelRequestEvent.getProxyServer();
-            final URI requestUri = tunnelRequestEvent.getUri();
+            final UriComponents requestUri = tunnelRequestEvent.getUri();
 
             RequestBuilder builder = new RequestBuilder();
             builder.setMethod(Method.CONNECT.getMethodString());
@@ -211,7 +208,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         }
 
         final Request request = httpTxContext.getRequest();
-        final URI uri = request.isUseRawUrl() ? request.getRawURI() : request.getURI();
+        final UriComponents uri = request.getURI();
         boolean secure = Utils.isSecure(uri);
 
         // If the request is secure, check to see if an error occurred during
@@ -222,7 +219,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
             return true;
         }
 
-        if (isUpgradeRequest(httpTxContext.getHandler()) && isWSRequest(httpTxContext.getRequestUrl())) {
+        if (isUpgradeRequest(httpTxContext.getHandler()) && isWSRequest(httpTxContext.getRequestUri())) {
             httpTxContext.setWSRequest(true);
             convertToUpgradeRequest(httpTxContext);
         }
@@ -242,7 +239,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
             final int port = uri.getPort();
             requestPacket.setRequestURI(uri.getHost() + ':' + (port == -1 ? 443 : port));
         } else {
-            requestPacket.setRequestURI(uri.getPath());
+            requestPacket.setRequestURI(getNonEmptyPath(uri));
         }
 
         final BodyHandler bodyHandler = isPayloadAllowed(method) ?
@@ -261,7 +258,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
 
         if (httpTxContext.isWSRequest()) {
             try {
-                final URI wsURI = new URI(httpTxContext.getWsRequestURI());
+                final URI wsURI = httpTxContext.getWsRequestURI().toURI();
                 httpTxContext.setProtocolHandler(Version.RFC6455.createHandler(true));
                 httpTxContext.setHandshake(httpTxContext.getProtocolHandler().createHandShake(wsURI));
                 requestPacket = (HttpRequestPacket) httpTxContext.getHandshake().composeHeaders().getHttpHeader();
@@ -419,7 +416,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         return newFilterChainContext;
     }
 
-    private static void addHostHeader(final Request request, final URI uri, final HttpRequestPacket requestPacket) {
+    private static void addHostHeader(final Request request, final UriComponents uri, final HttpRequestPacket requestPacket) {
         String host = request.getVirtualHost();
         if (host != null) {
             requestPacket.addHeader(Header.Host, host);
@@ -466,26 +463,21 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         return (handler instanceof UpgradeHandler);
     }
 
-    private static boolean isWSRequest(final String requestUri) {
-        return (requestUri.charAt(0) == 'w' && requestUri.charAt(1) == 's');
+    private static boolean isWSRequest(final UriComponents requestUri) {
+        return requestUri.getScheme().startsWith("ws");
     }
 
     private static void convertToUpgradeRequest(final HttpTxContext ctx) {
-        final int colonIdx = ctx.getRequestUrl().indexOf(':');
-
-        if (colonIdx < 2 || colonIdx > 3) {
-            throw new IllegalArgumentException("Invalid websocket URL: " + ctx.getRequestUrl());
-        }
-
-        final StringBuilder sb = new StringBuilder(ctx.getRequestUrl());
-        sb.replace(0, colonIdx, ((colonIdx == 2) ? "http" : "https"));
-        ctx.setWsRequestURI(ctx.getRequestUrl());
-        ctx.setRequestUrl(sb.toString());
+        
+        UriComponents originalUri = ctx.getRequestUri();
+        String newScheme = originalUri.getScheme().equalsIgnoreCase("https") ? "wss" : "ws";
+        ctx.setWsRequestURI(originalUri);
+        ctx.setRequestUri(originalUri.withNewScheme(newScheme));
     }
 
     private void addGeneralHeaders(final Request request, final HttpRequestPacket requestPacket) {
 
-        if (request.hasHeaders()) {
+        if (isNonEmpty(request.getHeaders())) {
             final FluentCaseInsensitiveStringsMap map = request.getHeaders();
             for (final Map.Entry<String, List<String>> entry : map.entrySet()) {
                 final String headerName = entry.getKey();
@@ -542,31 +534,9 @@ public final class AsyncHttpClientFilter extends BaseFilter {
 
     private static void addQueryString(final Request request, final HttpRequestPacket requestPacket) {
 
-        final FluentStringsMap map = request.getQueryParams();
-        if (isNonEmpty(map)) {
-            StringBuilder sb = new StringBuilder(128);
-            for (final Map.Entry<String, List<String>> entry : map.entrySet()) {
-                final String name = entry.getKey();
-                final List<String> values = entry.getValue();
-                if (isNonEmpty(values)) {
-                    try {
-                        for (int i = 0, len = values.size(); i < len; i++) {
-                            final String value = values.get(i);
-                            if (isNonEmpty(value)) {
-                                sb.append(URLEncoder.encode(name, StandardCharsets.UTF_8.name())).append('=')
-                                        .append(URLEncoder.encode(values.get(i), StandardCharsets.UTF_8.name())).append('&');
-                            } else {
-                                sb.append(URLEncoder.encode(name, StandardCharsets.UTF_8.name())).append('&');
-                            }
-                        }
-                    } catch (UnsupportedEncodingException ignored) {
-                    }
-                }
-            }
-            sb.setLength(sb.length() - 1);
-            String queryString = sb.toString();
-
-            requestPacket.setQueryString(queryString);
+        String query = request.getURI().getQuery();
+        if (isNonEmpty(query)) {
+            requestPacket.setQueryString(query);
         }
     }
 

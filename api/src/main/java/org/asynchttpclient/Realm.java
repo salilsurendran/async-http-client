@@ -16,8 +16,9 @@
  */
 package org.asynchttpclient;
 
-import static org.asynchttpclient.util.MiscUtil.isNonEmpty;
+import static org.asynchttpclient.util.MiscUtils.isNonEmpty;
 
+import org.asynchttpclient.uri.UriComponents;
 import org.asynchttpclient.util.StandardCharsets;
 
 import java.nio.charset.Charset;
@@ -42,24 +43,25 @@ public class Realm {
     private final String qop;
     private final String nc;
     private final String cnonce;
-    private final String uri;
+    private final UriComponents uri;
     private final String methodName;
     private final boolean usePreemptiveAuth;
     private final String enc;
     private final String host;
     private final boolean messageType2Received;
-    private final String domain;
+    private final String ntlmDomain;
     private final Charset charset;
     private final boolean useAbsoluteURI;
     private final boolean omitQuery;
+    private final boolean targetProxy;
 
     public enum AuthScheme {
         DIGEST, BASIC, NTLM, SPNEGO, KERBEROS, NONE
     }
 
     private Realm(AuthScheme scheme, String principal, String password, String realmName, String nonce, String algorithm, String response,
-            String qop, String nc, String cnonce, String uri, String method, boolean usePreemptiveAuth, String domain, String enc,
-            String host, boolean messageType2Received, String opaque, boolean useAbsoluteURI, boolean omitQuery) {
+            String qop, String nc, String cnonce, UriComponents uri, String method, boolean usePreemptiveAuth, String ntlmDomain, String enc,
+            String host, boolean messageType2Received, String opaque, boolean useAbsoluteURI, boolean omitQuery, boolean targetProxy) {
 
         this.principal = principal;
         this.password = password;
@@ -75,13 +77,14 @@ public class Realm {
         this.uri = uri;
         this.methodName = method;
         this.usePreemptiveAuth = usePreemptiveAuth;
-        this.domain = domain;
+        this.ntlmDomain = ntlmDomain;
         this.enc = enc;
         this.host = host;
         this.messageType2Received = messageType2Received;
         this.charset = enc != null ? Charset.forName(enc) : null;
         this.useAbsoluteURI = useAbsoluteURI;
         this.omitQuery = omitQuery;
+        this.targetProxy = targetProxy;
     }
 
     public String getPrincipal() {
@@ -133,7 +136,7 @@ public class Realm {
         return cnonce;
     }
 
-    public String getUri() {
+    public UriComponents getUri() {
         return uri;
     }
 
@@ -164,7 +167,7 @@ public class Realm {
      * @return the NTLM domain
      */
     public String getNtlmDomain() {
-        return domain;
+        return ntlmDomain;
     }
 
     /**
@@ -187,7 +190,11 @@ public class Realm {
     public boolean isOmitQuery() {
         return omitQuery;
     }
-    
+
+    public boolean isTargetProxy() {
+        return targetProxy;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o)
@@ -268,22 +275,23 @@ public class Realm {
         private String qop = "auth";
         private String nc = "00000001";
         private String cnonce = "";
-        private String uri = "";
+        private UriComponents uri;
         private String methodName = "GET";
-        private boolean usePreemptive = false;
-        private String domain = System.getProperty("http.auth.ntlm.domain", "");
+        private boolean usePreemptive;
+        private String ntlmDomain = System.getProperty("http.auth.ntlm.domain", "");
         private String enc = StandardCharsets.UTF_8.name();
         private String host = "localhost";
-        private boolean messageType2Received = false;
+        private boolean messageType2Received;
         private boolean useAbsoluteURI = true;
-        private boolean omitQuery = false;
+        private boolean omitQuery;
+        private boolean targetProxy;
 
         public String getNtlmDomain() {
-            return domain;
+            return ntlmDomain;
         }
 
-        public RealmBuilder setNtlmDomain(String domain) {
-            this.domain = domain;
+        public RealmBuilder setNtlmDomain(String ntlmDomain) {
+            this.ntlmDomain = ntlmDomain;
             return this;
         }
 
@@ -386,11 +394,11 @@ public class Realm {
             return this;
         }
 
-        public String getUri() {
+        public UriComponents getUri() {
             return uri;
         }
 
-        public RealmBuilder setUri(String uri) {
+        public RealmBuilder setUri(UriComponents uri) {
             this.uri = uri;
             return this;
         }
@@ -435,7 +443,16 @@ public class Realm {
             this.omitQuery = omitQuery;
             return this;
         }
-            
+
+        public boolean isTargetProxy() {
+            return targetProxy;
+        }
+        
+        public RealmBuilder setTargetProxy(boolean targetProxy) {
+            this.targetProxy = targetProxy;
+            return this;
+        }
+
         public RealmBuilder parseWWWAuthenticateHeader(String headerLine) {
             setRealmName(match(headerLine, "realm"));
             setNonce(match(headerLine, "nonce"));
@@ -463,6 +480,7 @@ public class Realm {
             } else {
                 setScheme(AuthScheme.BASIC);
             }
+            setTargetProxy(true);
             return this;
         }
 
@@ -483,6 +501,9 @@ public class Realm {
             setNtlmDomain(clone.getNtlmDomain());
             setNtlmHost(clone.getNtlmHost());
             setNtlmMessageType2Received(clone.isNtlmMessageType2Received());
+            setUseAbsoluteURI(clone.isUseAbsoluteURI());
+            setOmitQuery(clone.isOmitQuery());
+            setTargetProxy(clone.isTargetProxy());
             return this;
         }
 
@@ -510,8 +531,8 @@ public class Realm {
 
             // = to skip
             match += token.length() + 1;
-            int traillingComa = headerLine.indexOf(",", match);
-            String value = headerLine.substring(match, traillingComa > 0 ? traillingComa : headerLine.length());
+            int trailingComa = headerLine.indexOf(",", match);
+            String value = headerLine.substring(match, trailingComa > 0 ? trailingComa : headerLine.length());
             value = value.length() > 0 && value.charAt(value.length() - 1) == '"' ? value.substring(0, value.length() - 1) : value;
             return value.charAt(0) == '"' ? value.substring(1) : value;
         }
@@ -608,7 +629,7 @@ public class Realm {
             }
 
             return new Realm(scheme, principal, password, realmName, nonce, algorithm, response, qop, nc, cnonce, uri, methodName,
-                    usePreemptive, domain, enc, host, messageType2Received, opaque, useAbsoluteURI, omitQuery);
+                    usePreemptive, ntlmDomain, enc, host, messageType2Received, opaque, useAbsoluteURI, omitQuery, targetProxy);
         }
     }
 }

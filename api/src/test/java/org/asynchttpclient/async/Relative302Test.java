@@ -22,24 +22,25 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.asynchttpclient.Response;
-import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
 import java.util.Enumeration;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.Response;
+import org.asynchttpclient.uri.UriComponents;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 public abstract class Relative302Test extends AbstractBasicTest {
     private final AtomicBoolean isSet = new AtomicBoolean(false);
@@ -89,7 +90,7 @@ public abstract class Relative302Test extends AbstractBasicTest {
     // @Test(groups = { "online", "default_provider" })
     public void redirected302Test() throws Exception {
         isSet.getAndSet(false);
-        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirects(true).build();
+        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirect(true).build();
         AsyncHttpClient c = getAsyncHttpClient(cg);
 
         try {
@@ -109,7 +110,7 @@ public abstract class Relative302Test extends AbstractBasicTest {
     // @Test(groups = { "standalone", "default_provider" })
     public void redirected302InvalidTest() throws Exception {
         isSet.getAndSet(false);
-        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirects(true).build();
+        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirect(true).build();
         AsyncHttpClient c = getAsyncHttpClient(cg);
 
         // If the test hit a proxy, no ConnectException will be thrown and instead of 404 will be returned.
@@ -129,7 +130,7 @@ public abstract class Relative302Test extends AbstractBasicTest {
     public void absolutePathRedirectTest() throws Exception {
         isSet.getAndSet(false);
 
-        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirects(true).build();
+        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirect(true).build();
         AsyncHttpClient c = getAsyncHttpClient(cg);
         try {
             String redirectTarget = "/bar/test";
@@ -150,7 +151,7 @@ public abstract class Relative302Test extends AbstractBasicTest {
     public void relativePathRedirectTest() throws Exception {
         isSet.getAndSet(false);
 
-        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirects(true).build();
+        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirect(true).build();
         AsyncHttpClient c = getAsyncHttpClient(cg);
         try {
             String redirectTarget = "bar/test1";
@@ -167,7 +168,7 @@ public abstract class Relative302Test extends AbstractBasicTest {
         }
     }
 
-    private String getBaseUrl(URI uri) {
+    private String getBaseUrl(UriComponents uri) {
         String url = uri.toString();
         int port = uri.getPort();
         if (port == -1) {
@@ -177,7 +178,7 @@ public abstract class Relative302Test extends AbstractBasicTest {
         return url.substring(0, url.lastIndexOf(":") + String.valueOf(port).length() + 1);
     }
 
-    private static int getPort(URI uri) {
+    private static int getPort(UriComponents uri) {
         int port = uri.getPort();
         if (port == -1)
             port = uri.getScheme().equals("http") ? 80 : 443;

@@ -22,24 +22,24 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.asynchttpclient.Response;
-import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.server.handler.AbstractHandler;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.util.Enumeration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.URI;
-import java.util.Enumeration;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.Response;
+import org.asynchttpclient.uri.UriComponents;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 public abstract class PerRequestRelative302Test extends AbstractBasicTest {
 
@@ -94,7 +94,7 @@ public abstract class PerRequestRelative302Test extends AbstractBasicTest {
         isSet.getAndSet(false);
         AsyncHttpClient c = getAsyncHttpClient(null);
         try {
-            Response response = c.prepareGet(getTargetUrl()).setFollowRedirects(true).setHeader("X-redirect", "http://www.microsoft.com/").execute().get();
+            Response response = c.prepareGet(getTargetUrl()).setFollowRedirect(true).setHeader("X-redirect", "http://www.microsoft.com/").execute().get();
 
             assertNotNull(response);
             assertEquals(response.getStatusCode(), 200);
@@ -111,10 +111,10 @@ public abstract class PerRequestRelative302Test extends AbstractBasicTest {
     // @Test(groups = { "online", "default_provider" })
     public void notRedirected302Test() throws Exception {
         isSet.getAndSet(false);
-        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirects(true).build();
+        AsyncHttpClientConfig cg = new AsyncHttpClientConfig.Builder().setFollowRedirect(true).build();
         AsyncHttpClient c = getAsyncHttpClient(cg);
         try {
-            Response response = c.prepareGet(getTargetUrl()).setFollowRedirects(false).setHeader("X-redirect", "http://www.microsoft.com/").execute().get();
+            Response response = c.prepareGet(getTargetUrl()).setFollowRedirect(false).setHeader("X-redirect", "http://www.microsoft.com/").execute().get();
 
             assertNotNull(response);
             assertEquals(response.getStatusCode(), 302);
@@ -123,7 +123,7 @@ public abstract class PerRequestRelative302Test extends AbstractBasicTest {
         }
     }
 
-    private String getBaseUrl(URI uri) {
+    private String getBaseUrl(UriComponents uri) {
         String url = uri.toString();
         int port = uri.getPort();
         if (port == -1) {
@@ -133,7 +133,7 @@ public abstract class PerRequestRelative302Test extends AbstractBasicTest {
         return url.substring(0, url.lastIndexOf(":") + String.valueOf(port).length() + 1);
     }
 
-    private static int getPort(URI uri) {
+    private static int getPort(UriComponents uri) {
         int port = uri.getPort();
         if (port == -1)
             port = uri.getScheme().equals("http") ? 80 : 443;
@@ -146,7 +146,7 @@ public abstract class PerRequestRelative302Test extends AbstractBasicTest {
         AsyncHttpClient c = getAsyncHttpClient(null);
         try {
             // If the test hit a proxy, no ConnectException will be thrown and instead of 404 will be returned.
-            Response response = c.preparePost(getTargetUrl()).setFollowRedirects(true).setHeader("X-redirect", String.format("http://127.0.0.1:%d/", port2)).execute().get();
+            Response response = c.preparePost(getTargetUrl()).setFollowRedirect(true).setHeader("X-redirect", String.format("http://127.0.0.1:%d/", port2)).execute().get();
 
             assertNotNull(response);
             assertEquals(response.getStatusCode(), 404);
@@ -163,7 +163,7 @@ public abstract class PerRequestRelative302Test extends AbstractBasicTest {
 
         AsyncHttpClient c = getAsyncHttpClient(null);
         try {
-            Response response = c.preparePost(getTargetUrl()).setFollowRedirects(true).setHeader("X-redirect", "/foo/test").execute().get();
+            Response response = c.preparePost(getTargetUrl()).setFollowRedirect(true).setHeader("X-redirect", "/foo/test").execute().get();
             assertNotNull(response);
             assertEquals(response.getStatusCode(), 302);
             assertEquals(response.getUri().toString(), getTargetUrl());

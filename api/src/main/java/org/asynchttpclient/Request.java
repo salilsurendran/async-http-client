@@ -18,11 +18,11 @@ package org.asynchttpclient;
 
 import org.asynchttpclient.cookie.Cookie;
 import org.asynchttpclient.multipart.Part;
+import org.asynchttpclient.uri.UriComponents;
 
 import java.io.File;
 import java.io.InputStream;
 import java.net.InetAddress;
-import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 
@@ -46,18 +46,7 @@ public interface Request {
      */
     String getMethod();
 
-    /**
-     * Return the decoded url
-     *
-     * @return the decoded url
-     */
-    String getUrl();
-
-    URI getOriginalURI();
-
-    URI getURI();
-
-    URI getRawURI();
+    UriComponents getURI();
 
     /**
      * Return the InetAddress to override
@@ -69,26 +58,11 @@ public interface Request {
     InetAddress getLocalAddress();
 
     /**
-     * Return the undecoded url
-     *
-     * @return the undecoded url
-     */
-    String getRawUrl();
-
-    /**
      * Return the current set of Headers.
      *
      * @return a {@link FluentCaseInsensitiveStringsMap} contains headers.
      */
     FluentCaseInsensitiveStringsMap getHeaders();
-
-    /**
-     * @return return <code>true</code> if request headers have been added,
-     *  otherwise, returns <code>false</code>.
-     *
-     * @since 2.0
-     */
-    boolean hasHeaders();
 
     /**
      * Return Coookie.
@@ -133,11 +107,11 @@ public interface Request {
     long getContentLength();
 
     /**
-     * Return the current parameters.
+     * Return the current form parameters.
      *
      * @return a {@link FluentStringsMap} of parameters.
      */
-    FluentStringsMap getParams();
+    List<Param> getFormParams();
 
     /**
      * Return the current {@link Part}
@@ -158,7 +132,7 @@ public interface Request {
      *
      * @return {@link FluentStringsMap} of query string
      */
-    FluentStringsMap getQueryParams();
+    List<Param> getQueryParams();
 
     /**
      * Return the {@link ProxyServer}
@@ -182,23 +156,16 @@ public interface Request {
     File getFile();
 
     /**
-     * Return the <tt>true></tt> to follow redirect
+     * Return follow redirect
      *
-     * @return the <tt>true></tt> to follow redirect
+     * @return the <tt>TRUE></tt> to follow redirect, FALSE, if NOT to follow, whatever the client config.
+     * Return null if not set.
      */
-    boolean isRedirectEnabled();
+    Boolean getFollowRedirect();
 
     /**
-     *
-     * @return <tt>true></tt> if request's redirectEnabled setting
-     *          should be used in place of client's
-     */
-    boolean isRedirectOverrideSet();
-
-    /**
-     * Return the request time out in milliseconds.
-     *
-     * @return requestTimeoutInMs.
+     * Overrides the config default value
+     * @return the request timeout
      */
     int getRequestTimeoutInMs();
 
@@ -216,8 +183,5 @@ public interface Request {
      */
     String getBodyEncoding();
 
-    boolean isUseRawUrl();
-
     ConnectionPoolKeyStrategy getConnectionPoolKeyStrategy();
 }
-
