@@ -33,7 +33,7 @@ import org.asynchttpclient.listener.TransferCompletionHandler;
 import org.asynchttpclient.providers.netty.NettyAsyncHttpProviderConfig;
 import org.asynchttpclient.providers.netty.channel.Channels;
 import org.asynchttpclient.providers.netty.future.NettyResponseFuture;
-import org.asynchttpclient.providers.netty.request.timeout.IdleConnectionTimeoutTimerTask;
+import org.asynchttpclient.providers.netty.request.timeout.ReadTimeoutTimerTask;
 import org.asynchttpclient.providers.netty.request.timeout.RequestTimeoutTimerTask;
 import org.asynchttpclient.providers.netty.request.timeout.TimeoutsHolder;
 import org.asynchttpclient.uri.UriComponents;
@@ -78,39 +78,40 @@ public class NettyRequestSender {
 
     public boolean retry(NettyResponseFuture<?> future, Channel channel) {
 
-        boolean success = false;
+        if (closed.get())
+            return false;
 
-        if (!closed.get()) {
-            channels.removeAll(channel);
+        channels.removeAll(channel);
 
-            if (future == null) {
-                Object attachment = Channels.getDefaultAttribute(channel);
-                if (attachment instanceof NettyResponseFuture)
-                    future = (NettyResponseFuture<?>) attachment;
-            }
-
-            if (future != null && future.canBeReplayed()) {
-                future.setState(NettyResponseFuture.STATE.RECONNECTED);
-                future.getAndSetStatusReceived(false);
-
-                LOGGER.debug("Trying to recover request {}\n", future.getNettyRequest());
-                if (future.getAsyncHandler() instanceof AsyncHandlerExtensions) {
-                    AsyncHandlerExtensions.class.cast(future.getAsyncHandler()).onRetry();
-                }
-
-                try {
-                    sendNextRequest(future.getRequest(), future);
-                    success = true;
-                } catch (IOException iox) {
-                    future.setState(NettyResponseFuture.STATE.CLOSED);
-                    future.abort(iox);
-                    LOGGER.error("Remotely Closed, unable to recover", iox);
-                }
-            } else {
-                LOGGER.debug("Unable to recover future {}\n", future);
-            }
+        if (future == null) {
+            Object attachment = Channels.getDefaultAttribute(channel);
+            if (attachment instanceof NettyResponseFuture)
+                future = (NettyResponseFuture<?>) attachment;
         }
-        return success;
+
+        if (future != null && future.canBeReplayed()) {
+            future.setState(NettyResponseFuture.STATE.RECONNECTED);
+            future.getAndSetStatusReceived(false);
+
+            LOGGER.debug("Trying to recover request {}\n", future.getNettyRequest());
+            if (future.getAsyncHandler() instanceof AsyncHandlerExtensions) {
+                AsyncHandlerExtensions.class.cast(future.getAsyncHandler()).onRetry();
+            }
+
+            try {
+                sendNextRequest(future.getRequest(), future);
+                return true;
+                
+            } catch (IOException iox) {
+                future.setState(NettyResponseFuture.STATE.CLOSED);
+                future.abort(iox);
+                LOGGER.error("Remotely Closed, unable to recover", iox);
+                return false;
+            }
+        } else {
+            LOGGER.debug("Unable to recover future {}\n", future);
+            return false;
+        }
     }
 
     public boolean applyIoExceptionFiltersAndReplayRequest(NettyResponseFuture<?> future, IOException e, Channel channel)
@@ -218,48 +219,46 @@ public class NettyRequestSender {
 
         // Do not throw an exception when we need an extra connection for a redirect
         // FIXME why? This violate the max connection per host handling, right?
-        boolean acquiredConnection = !reclaimCache && channels.acquireConnection(asyncHandler);
         Bootstrap bootstrap = channels.getBootstrap(request.getURI(), useSSl, useProxy);
 
-        NettyConnectListener<T> connectListener = new NettyConnectListener<T>(config, this, future);
 
-        ChannelFuture channelFuture;
+        boolean channelPreempted = false;
+        String poolKey = null;
+        
+        // Do not throw an exception when we need an extra connection for a redirect.
+        if (!reclaimCache) {
+
+            // only compute when maxConnectionPerHost is enabled
+            // FIXME clean up
+            if (config.getMaxConnectionsPerHost() > 0)
+                poolKey = channels.getPoolKey(future);
+
+            channelPreempted = channels.preemptChannel(asyncHandler, poolKey);
+        }
+
         try {
-            channelFuture = connect(request, uri, proxy, useProxy, bootstrap);
+            ChannelFuture channelFuture = connect(request, uri, proxy, useProxy, bootstrap);
+            channelFuture.addListener(new NettyConnectListener<T>(config, this, future, channels, channelPreempted, poolKey));
 
         } catch (Throwable t) {
-            if (acquiredConnection) {
-                channels.releaseFreeConnections();
-            }
-            channels.abort(connectListener.future(), t.getCause() == null ? t : t.getCause());
-            return connectListener.future();
+            if (channelPreempted)
+                channels.abortChannelPreemption(poolKey);
+
+            channels.abort(future, t.getCause() == null ? t : t.getCause());
         }
 
-        channelFuture.addListener(connectListener);
-
-        LOGGER.debug("\nNon cached request \n{}\n\nusing Channel \n{}\n", connectListener.future().getNettyRequest().getHttpRequest(),
-                channelFuture.channel());
-
-        if (!connectListener.future().isCancelled() || !connectListener.future().isDone()) {
-            channels.registerChannel(channelFuture.channel());
-            connectListener.future().attachChannel(channelFuture.channel(), false);
-        } else if (acquiredConnection) {
-            channels.releaseFreeConnections();
-        }
-        return connectListener.future();
+        return future;
     }
 
     private <T> NettyResponseFuture<T> newNettyResponseFuture(UriComponents uri, Request request, AsyncHandler<T> asyncHandler,
             NettyRequest nettyRequest, ProxyServer proxyServer) {
 
-        int requestTimeout = AsyncHttpProviderUtils.requestTimeout(config, request);
         NettyResponseFuture<T> f = new NettyResponseFuture<T>(//
                 uri,//
                 request,//
                 asyncHandler,//
                 nettyRequest,//
-                requestTimeout,//
-                config,//
+                config.getMaxRequestRetry(),//
                 request.getConnectionPoolKeyStrategy(),//
                 proxyServer);
 
@@ -387,16 +386,16 @@ public class NettyRequestSender {
             TimeoutsHolder timeoutsHolder = new TimeoutsHolder();
             if (requestTimeoutInMs != -1) {
                 Timeout requestTimeout = channels.newTimeoutInMs(new RequestTimeoutTimerTask(nettyResponseFuture, channels, timeoutsHolder,
-                        closed), requestTimeoutInMs);
+                        closed, requestTimeoutInMs), requestTimeoutInMs);
                 timeoutsHolder.requestTimeout = requestTimeout;
             }
 
-            int idleConnectionTimeoutInMs = config.getIdleConnectionTimeoutInMs();
-            if (idleConnectionTimeoutInMs != -1 && idleConnectionTimeoutInMs < requestTimeoutInMs) {
+            int readTimeout = config.getReadTimeout();
+            if (readTimeout != -1 && readTimeout < requestTimeoutInMs) {
                 // no need for a idleConnectionTimeout that's less than the requestTimeoutInMs
-                Timeout idleConnectionTimeout = channels.newTimeoutInMs(new IdleConnectionTimeoutTimerTask(nettyResponseFuture, channels,
-                        timeoutsHolder, closed, requestTimeoutInMs, idleConnectionTimeoutInMs), idleConnectionTimeoutInMs);
-                timeoutsHolder.idleConnectionTimeout = idleConnectionTimeout;
+                Timeout idleConnectionTimeout = channels.newTimeoutInMs(new ReadTimeoutTimerTask(nettyResponseFuture, channels,
+                        timeoutsHolder, closed, requestTimeoutInMs, readTimeout), readTimeout);
+                timeoutsHolder.readTimeout = idleConnectionTimeout;
             }
             nettyResponseFuture.setTimeoutsHolder(timeoutsHolder);
         } catch (RejectedExecutionException ex) {

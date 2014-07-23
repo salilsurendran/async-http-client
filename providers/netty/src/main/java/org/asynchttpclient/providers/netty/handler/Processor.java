@@ -115,7 +115,7 @@ public class Processor extends ChannelInboundHandlerAdapter {
         }
 
         Channel channel = ctx.channel();
-        channels.removeFromPool(channel);
+        channels.removeAll(channel);
         Object attachment = Channels.getDefaultAttribute(channel);
         LOGGER.debug("Channel Closed: {} with attachment {}", channel, attachment);
 
@@ -183,7 +183,7 @@ public class Processor extends ChannelInboundHandlerAdapter {
                     }
                 }
 
-                if (StackTraceInspector.abortOnReadCloseException(cause) || StackTraceInspector.abortOnWriteCloseException(cause)) {
+                if (StackTraceInspector.abortOnReadOrWriteException(cause)) {
                     LOGGER.debug("Trying to recover from dead Channel: {}", channel);
                     return;
                 }

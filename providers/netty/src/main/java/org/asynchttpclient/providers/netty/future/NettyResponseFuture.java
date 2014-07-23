@@ -18,7 +18,6 @@ package org.asynchttpclient.providers.netty.future;
 import static org.asynchttpclient.util.DateUtils.millisTime;
 
 import org.asynchttpclient.AsyncHandler;
-import org.asynchttpclient.AsyncHttpClientConfig;
 import org.asynchttpclient.ConnectionPoolKeyStrategy;
 import org.asynchttpclient.ProxyServer;
 import org.asynchttpclient.Request;
@@ -54,14 +53,12 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
 
-    private static final Logger logger = LoggerFactory.getLogger(NettyResponseFuture.class);
-    public static final String MAX_RETRY = "org.asynchttpclient.providers.netty.maxRetry";
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyResponseFuture.class);
 
     public enum STATE {
         NEW, POOLED, RECONNECTED, CLOSED,
     }
 
-    private final int requestTimeoutInMs;
     private volatile boolean requestTimeoutReached;
     private volatile boolean idleConnectionTimeoutReached;
     private final long start = millisTime();
@@ -105,37 +102,22 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
             Request request,//
             AsyncHandler<V> asyncHandler,//
             NettyRequest nettyRequest,//
-            int requestTimeoutInMs,//
-            AsyncHttpClientConfig config,//
+            int maxRetry,//
             ConnectionPoolKeyStrategy connectionPoolKeyStrategy,//
             ProxyServer proxyServer) {
 
         this.asyncHandler = asyncHandler;
-        this.requestTimeoutInMs = requestTimeoutInMs;
         this.request = request;
         this.nettyRequest = nettyRequest;
         this.uri = uri;
         this.connectionPoolKeyStrategy = connectionPoolKeyStrategy;
         this.proxyServer = proxyServer;
-
-        maxRetry = Integer.getInteger(MAX_RETRY, config.getMaxRequestRetry());
+        this.maxRetry = maxRetry;
     }
 
-    public UriComponents getURI() {
-        return uri;
-    }
-
-    public void setURI(UriComponents uri) {
-        this.uri = uri;
-    }
-
-    public ConnectionPoolKeyStrategy getConnectionPoolKeyStrategy() {
-        return connectionPoolKeyStrategy;
-    }
-
-    public ProxyServer getProxyServer() {
-        return proxyServer;
-    }
+    /*********************************************/
+    /**       java.util.concurrent.Future       **/
+    /*********************************************/
 
     @Override
     public boolean isDone() {
@@ -145,10 +127,6 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
     @Override
     public boolean isCancelled() {
         return isCancelled.get();
-    }
-
-    public void setAsyncHandler(AsyncHandler<V> asyncHandler) {
-        this.asyncHandler = asyncHandler;
     }
 
     @Override
@@ -168,12 +146,131 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
             try {
                 asyncHandler.onThrowable(new CancellationException());
             } catch (Throwable t) {
-                logger.warn("cancel", t);
+                LOGGER.warn("cancel", t);
             }
         }
         latch.countDown();
         runListeners();
         return true;
+    }
+
+    @Override
+    public V get() throws InterruptedException, ExecutionException {
+        latch.await();
+        return getContent();
+    }
+
+    @Override
+    public V get(long l, TimeUnit tu) throws InterruptedException, TimeoutException, ExecutionException {
+        if (!latch.await(l, tu))
+            throw new TimeoutException();
+        return getContent();
+    }
+
+    private V getContent() throws ExecutionException {
+
+        ExecutionException e = exEx.get();
+        if (e != null)
+            throw e;
+
+        V update = content.get();
+        // No more retry
+        currentRetry.set(maxRetry);
+        if (!contentProcessed.getAndSet(true)) {
+            try {
+                update = asyncHandler.onCompleted();
+            } catch (Throwable ex) {
+                if (!onThrowableCalled.getAndSet(true)) {
+                    try {
+                        try {
+                            asyncHandler.onThrowable(ex);
+                        } catch (Throwable t) {
+                            LOGGER.debug("asyncHandler.onThrowable", t);
+                        }
+                        throw new RuntimeException(ex);
+                    } finally {
+                        cancelTimeouts();
+                    }
+                }
+            }
+            content.compareAndSet(null, update);
+        }
+        return update;
+    }
+
+    /*********************************************/
+    /**   org.asynchttpclient.ListenableFuture  **/
+    /*********************************************/
+
+    public final void done() {
+
+        cancelTimeouts();
+
+        if (isDone.getAndSet(true) || isCancelled.get())
+            return;
+
+        try {
+            getContent();
+
+        } catch (ExecutionException t) {
+            return;
+        } catch (RuntimeException t) {
+            Throwable exception = t.getCause() != null ? t.getCause() : t;
+            exEx.compareAndSet(null, new ExecutionException(exception));
+
+        } finally {
+            latch.countDown();
+        }
+
+        runListeners();
+    }
+
+    public final void abort(final Throwable t) {
+
+        cancelTimeouts();
+
+        if (isDone.get() || isCancelled.getAndSet(true))
+            return;
+
+        exEx.compareAndSet(null, new ExecutionException(t));
+        if (onThrowableCalled.compareAndSet(false, true)) {
+            try {
+                asyncHandler.onThrowable(t);
+            } catch (Throwable te) {
+                LOGGER.debug("asyncHandler.onThrowable", te);
+            }
+        }
+        latch.countDown();
+        runListeners();
+    }
+
+    @Override
+    public void touch() {
+        touch.set(millisTime());
+    }
+
+    /*********************************************/
+    /**                 INTERNAL                **/
+    /*********************************************/
+
+    public UriComponents getURI() {
+        return uri;
+    }
+
+    public void setURI(UriComponents uri) {
+        this.uri = uri;
+    }
+
+    public ConnectionPoolKeyStrategy getConnectionPoolKeyStrategy() {
+        return connectionPoolKeyStrategy;
+    }
+
+    public ProxyServer getProxyServer() {
+        return proxyServer;
+    }
+
+    public void setAsyncHandler(AsyncHandler<V> asyncHandler) {
+        this.asyncHandler = asyncHandler;
     }
 
     /**
@@ -201,135 +298,11 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
         return idleConnectionTimeoutReached;
     }
 
-    @Override
-    public V get() throws InterruptedException, ExecutionException {
-        try {
-            return get(requestTimeoutInMs, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            cancelTimeouts();
-            throw new ExecutionException(e);
-        }
-    }
-
     public void cancelTimeouts() {
         if (timeoutsHolder != null) {
             timeoutsHolder.cancel();
             timeoutsHolder = null;
         }
-    }
-
-    @Override
-    public V get(long l, TimeUnit tu) throws InterruptedException, TimeoutException, ExecutionException {
-        if (!isDone() && !isCancelled()) {
-            boolean expired = false;
-            if (l == -1) {
-                latch.await();
-            } else {
-                expired = !latch.await(l, tu);
-            }
-
-            if (expired) {
-                isCancelled.set(true);
-                try {
-                    Channels.setDefaultAttribute(channel, DiscardEvent.INSTANCE);
-                    channel.close();
-                } catch (Throwable t) {
-                    // Ignore
-                }
-                TimeoutException te = new TimeoutException(String.format("No response received after %s %s", l, tu.name().toLowerCase()));
-                if (!onThrowableCalled.getAndSet(true)) {
-                    try {
-                        try {
-                            asyncHandler.onThrowable(te);
-                        } catch (Throwable t) {
-                            logger.debug("asyncHandler.onThrowable", t);
-                        }
-                        throw new ExecutionException(te);
-                    } finally {
-                        cancelTimeouts();
-                    }
-                }
-            }
-            isDone.set(true);
-
-            ExecutionException e = exEx.getAndSet(null);
-            if (e != null) {
-                throw e;
-            }
-        }
-        return getContent();
-    }
-
-    private V getContent() throws ExecutionException {
-        ExecutionException e = exEx.getAndSet(null);
-        if (e != null) {
-            throw e;
-        }
-
-        V update = content.get();
-        // No more retry
-        currentRetry.set(maxRetry);
-        if (exEx.get() == null && !contentProcessed.getAndSet(true)) {
-            try {
-                update = asyncHandler.onCompleted();
-            } catch (Throwable ex) {
-                if (!onThrowableCalled.getAndSet(true)) {
-                    try {
-                        try {
-                            asyncHandler.onThrowable(ex);
-                        } catch (Throwable t) {
-                            logger.debug("asyncHandler.onThrowable", t);
-                        }
-                        throw new RuntimeException(ex);
-                    } finally {
-                        cancelTimeouts();
-                    }
-                }
-            }
-            content.compareAndSet(null, update);
-        }
-        return update;
-    }
-
-    public final void done() {
-
-        try {
-            cancelTimeouts();
-
-            if (exEx.get() != null) {
-                return;
-            }
-            getContent();
-            isDone.set(true);
-        } catch (ExecutionException t) {
-            return;
-        } catch (RuntimeException t) {
-            Throwable exception = t.getCause() != null ? t.getCause() : t;
-            exEx.compareAndSet(null, new ExecutionException(exception));
-
-        } finally {
-            latch.countDown();
-        }
-
-        runListeners();
-    }
-
-    public final void abort(final Throwable t) {
-        cancelTimeouts();
-
-        if (isDone.get() || isCancelled.getAndSet(true))
-            return;
-
-        exEx.compareAndSet(null, new ExecutionException(t));
-        if (onThrowableCalled.compareAndSet(false, true)) {
-            try {
-                asyncHandler.onThrowable(t);
-            } catch (Throwable te) {
-                logger.debug("asyncHandler.onThrowable", te);
-            }
-        }
-        latch.countDown();
-        runListeners();
     }
 
     public final Request getRequest() {
@@ -408,11 +381,6 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
         this.streamWasAlreadyConsumed = streamWasAlreadyConsumed;
     }
 
-    @Override
-    public void touch() {
-        touch.set(millisTime());
-    }
-
     public long getLastTouch() {
         return touch.get();
     }
@@ -470,9 +438,9 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
     }
 
     public SocketAddress getChannelRemoteAddress() {
-        return channel() != null? channel().remoteAddress(): null;
+        return channel() != null ? channel().remoteAddress() : null;
     }
-    
+
     public void setRequest(Request request) {
         this.request = request;
     }
@@ -492,10 +460,6 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
         return start;
     }
 
-    public long getRequestTimeoutInMs() {
-        return requestTimeoutInMs;
-    }
-
     @Override
     public String toString() {
         return "NettyResponseFuture{" + //
@@ -503,7 +467,6 @@ public final class NettyResponseFuture<V> extends AbstractListenableFuture<V> {
                 ",\n\tisDone=" + isDone + //
                 ",\n\tisCancelled=" + isCancelled + //
                 ",\n\tasyncHandler=" + asyncHandler + //
-                ",\n\trequestTimeoutInMs=" + requestTimeoutInMs + //
                 ",\n\tnettyRequest=" + nettyRequest + //
                 ",\n\tcontent=" + content + //
                 ",\n\turi=" + uri + //

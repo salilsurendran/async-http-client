@@ -73,7 +73,9 @@ import java.util.LinkedHashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.glassfish.grizzly.nio.RoundRobinConnectionDistributor;
 import org.glassfish.grizzly.spdy.SpdyVersion;
+import org.glassfish.grizzly.threadpool.ThreadPoolConfig;
 
 /**
  * A Grizzly 2.0-based implementation of {@link AsyncHttpProvider}.
@@ -212,7 +214,7 @@ public class GrizzlyAsyncHttpProvider implements AsyncHttpProvider {
         final FilterChainBuilder secure = FilterChainBuilder.stateless();
         secure.add(new TransportFilter());
 
-        final int timeout = clientConfig.getRequestTimeoutInMs();
+        final int timeout = clientConfig.getRequestTimeout();
         if (timeout > 0) {
             int delay = 500;
             //noinspection ConstantConditions
@@ -230,7 +232,7 @@ public class GrizzlyAsyncHttpProvider implements AsyncHttpProvider {
                     final HttpTxContext context = HttpTxContext.get(ctx);
                     if (context != null) {
                         if (context.isWSRequest()) {
-                            return clientConfig.getWebSocketIdleTimeoutInMs();
+                            return clientConfig.getWebSocketTimeout();
                         }
                         int requestTimeout = AsyncHttpProviderUtils.requestTimeout(clientConfig, context.getRequest());
                         if (requestTimeout > 0) {
@@ -259,8 +261,9 @@ public class GrizzlyAsyncHttpProvider implements AsyncHttpProvider {
             }
         }
         final SSLEngineConfigurator configurator = new SSLEngineConfigurator(context, true, false, false);
-        final SwitchingSSLFilter filter = new SwitchingSSLFilter(configurator);
-        secure.add(filter);
+        final SwitchingSSLFilter sslFilter = new SwitchingSSLFilter(configurator);
+        secure.add(sslFilter);
+        
         GrizzlyAsyncHttpProviderConfig providerConfig = (GrizzlyAsyncHttpProviderConfig) clientConfig.getAsyncHttpProviderConfig();
 
         boolean npnEnabled = NextProtoNegSupport.isEnabled();
@@ -304,6 +307,23 @@ public class GrizzlyAsyncHttpProvider implements AsyncHttpProvider {
         secure.add(new WebSocketClientFilter());
 
         clientTransport.getAsyncQueueIO().getWriter().setMaxPendingBytesPerConnection(AUTO_SIZE);
+        
+        clientTransport.setNIOChannelDistributor(
+                new RoundRobinConnectionDistributor(clientTransport, false, false));
+        
+        final int kernelThreadsCount =
+                clientConfig.getIoThreadMultiplier() *
+                Runtime.getRuntime().availableProcessors();
+        
+        clientTransport.setSelectorRunnersCount(kernelThreadsCount);
+        clientTransport.setKernelThreadPoolConfig(
+                ThreadPoolConfig.defaultConfig()
+                .setCorePoolSize(kernelThreadsCount)
+                .setMaxPoolSize(kernelThreadsCount)
+                .setPoolName("grizzly-ahc-kernel")
+//                .setPoolName(Utils.discoverTestName("grizzly-ahc-kernel")) // uncomment for tests to track down the leaked threads
+        );
+        
         if (providerConfig != null) {
             final TransportCustomizer customizer = (TransportCustomizer) providerConfig.getProperty(Property.TRANSPORT_CUSTOMIZER);
             if (customizer != null) {
@@ -335,7 +355,7 @@ public class GrizzlyAsyncHttpProvider implements AsyncHttpProvider {
         } else {
             pool = null;
         }
-        connectionManager = new ConnectionManager(this, pool, secure, nonSecure, filter);
+        connectionManager = new ConnectionManager(this, pool, secure, nonSecure);
 
     }
 
