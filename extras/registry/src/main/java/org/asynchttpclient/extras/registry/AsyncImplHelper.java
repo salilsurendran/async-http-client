@@ -14,38 +14,19 @@ package org.asynchttpclient.extras.registry;
 
 
 import org.asynchttpclient.AsyncHttpClient;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigException;
-import com.typesafe.config.ConfigFactory;
+import org.asynchttpclient.util.AsyncPropertiesHelper;
 
-import java.io.IOException;
-import java.io.InputStream;
+import com.typesafe.config.ConfigException;
+
 import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Properties;
 
 public class AsyncImplHelper {
 
     public static final String ASYNC_HTTP_CLIENT_IMPL_SYSTEM_PROPERTY = "org.async.http.client.impl";
     public static final String ASYNC_HTTP_CLIENT_REGISTRY_SYSTEM_PROPERTY = "org.async.http.client.registry.impl";
-    public static final String ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE = "asynchttpclient.properties";
-    public static final String DEFAULTAHC_PROPERTIES = "defaultahc.properties";
-
-    /*private static String getSystemProperty(final String systemProperty) {
-        return AccessController.doPrivileged(new PrivilegedAction<String>() {
-            public String run() {
-                return System.getProperty(systemProperty);
-            }
-        });
-    }*/
-
-    public static Config getAysncHttpClientConfig(){
-        return ConfigFactory.load(ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE)
-                .withFallback(ConfigFactory.load(DEFAULTAHC_PROPERTIES));
-    }
-
+    
     /*
      * Returns the class specified by either a system property or a properties
      * file as the class to instantiated for the AsyncHttpClient. Returns null
@@ -54,37 +35,13 @@ public class AsyncImplHelper {
      */
     public static Class<AsyncHttpClient> getAsyncImplClass(String propertyName) {
         try {
-            String asyncHttpClientImplClassName = getAysncHttpClientConfig().getString(propertyName);
+            String asyncHttpClientImplClassName = AsyncPropertiesHelper.getAysncHttpClientConfig().getString(propertyName);
             Class<AsyncHttpClient> asyncHttpClientImplClass = AsyncImplHelper.getClass(asyncHttpClientImplClassName);
             return asyncHttpClientImplClass;
         }catch(ConfigException configException) {
             return null;
         }
     }
-
-    /*public static Properties getAsyncImplProperties() {
-        try {
-            return AccessController.doPrivileged(new PrivilegedExceptionAction<Properties>() {
-                public Properties run() throws IOException {
-                    InputStream stream = null;
-                    ClassLoader cl = Thread.currentThread().getContextClassLoader();
-                    if (cl != null)
-                        stream = cl.getResourceAsStream(AsyncImplHelper.ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE);
-                    if (stream == null)
-                        stream = ClassLoader.getSystemClassLoader().getResourceAsStream(
-                                AsyncImplHelper.ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE);
-                    if (stream != null) {
-                        Properties properties = new Properties();
-                        properties.load(stream);
-                        return properties;
-                    }
-                    return null;
-                }
-            });
-        } catch (PrivilegedActionException e) {
-            throw new AsyncHttpClientImplException("Unable to read properties file because of exception : " + e.getMessage(), e);
-        }
-    }*/
 
     private static Class<AsyncHttpClient> getClass(final String asyncImplClassName) {
         try {
