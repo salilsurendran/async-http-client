@@ -5,8 +5,8 @@ import com.typesafe.config.ConfigFactory;
 
 public class AsyncPropertiesHelper {
     
-    public static final String ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE = "asynchttpclient.properties";
-    public static final String DEFAULTAHC_PROPERTIES = "defaultahc.properties";
+    public static final String ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE = "ahc.properties";
+    public static final String DEFAULTAHC_PROPERTIES = "ahc-default.properties";
     
     public static Config getAysncHttpClientConfig(){
         return ConfigFactory.load(ASYNC_HTTP_CLIENT_IMPL_PROPERTIES_FILE)
