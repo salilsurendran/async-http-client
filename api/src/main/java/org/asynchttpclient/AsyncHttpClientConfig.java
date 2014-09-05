@@ -17,15 +17,6 @@ package org.asynchttpclient;
 
 import static org.asynchttpclient.AsyncHttpClientConfigDefaults.*;
 
-import org.asynchttpclient.date.TimeConverter;
-import org.asynchttpclient.filter.IOExceptionFilter;
-import org.asynchttpclient.filter.RequestFilter;
-import org.asynchttpclient.filter.ResponseFilter;
-import org.asynchttpclient.util.ProxyUtils;
-
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
@@ -34,6 +25,16 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+
+import org.asynchttpclient.date.TimeConverter;
+import org.asynchttpclient.filter.IOExceptionFilter;
+import org.asynchttpclient.filter.RequestFilter;
+import org.asynchttpclient.filter.ResponseFilter;
+import org.asynchttpclient.util.DefaultHostnameVerifier;
+import org.asynchttpclient.util.ProxyUtils;
 
 /**
  * Configuration class to use with a {@link AsyncHttpClient}. System property can be also used to configure this
@@ -90,9 +91,9 @@ public class AsyncHttpClientConfig {
     protected boolean strict302Handling;
 
     protected ProxyServerSelector proxyServerSelector;
-    protected boolean useRelativeURIsWithSSLProxies;
+    protected boolean useRelativeURIsWithConnectProxies;
 
-    protected boolean compressionEnabled;
+    protected boolean compressionEnforced;
     protected String userAgent;
     protected ExecutorService applicationThreadPool;
     protected Realm realm;
@@ -132,8 +133,8 @@ public class AsyncHttpClientConfig {
             boolean strict302Handling, //
             ExecutorService applicationThreadPool,//
             ProxyServerSelector proxyServerSelector, //
-            boolean useRelativeURIsWithSSLProxies, //
-            boolean compressionEnabled, //
+            boolean useRelativeURIsWithConnectProxies, //
+            boolean compressionEnforced, //
             String userAgent,//
             Realm realm,//
             List<RequestFilter> requestFilters,//
@@ -166,8 +167,8 @@ public class AsyncHttpClientConfig {
         this.removeQueryParamOnRedirect = removeQueryParamOnRedirect;
         this.strict302Handling = strict302Handling;
         this.proxyServerSelector = proxyServerSelector;
-        this.useRelativeURIsWithSSLProxies = useRelativeURIsWithSSLProxies;
-        this.compressionEnabled = compressionEnabled;
+        this.useRelativeURIsWithConnectProxies = useRelativeURIsWithConnectProxies;
+        this.compressionEnforced = compressionEnforced;
         this.userAgent = userAgent;
         this.applicationThreadPool = applicationThreadPool == null ? Executors.newCachedThreadPool() : applicationThreadPool;
         this.realm = realm;
@@ -286,12 +287,12 @@ public class AsyncHttpClientConfig {
     }
 
     /**
-     * Is HTTP compression enabled.
+     * Is HTTP compression enforced.
      *
-     * @return true if compression is enabled
+     * @return true if compression is enforced
      */
-    public boolean isCompressionEnabled() {
-        return compressionEnabled;
+    public boolean isCompressionEnforced() {
+        return compressionEnforced;
     }
 
     /**
@@ -492,13 +493,13 @@ public class AsyncHttpClientConfig {
     }
 
     /**
-     * @return<code>true</code> if AHC should use relative URIs instead of absolute ones when talking with a SSL proxy,
-     *  otherwise <code>false</code>.
+     * @return<code>true</code> if AHC should use relative URIs instead of absolute ones when talking with a SSL proxy
+     * or WebSocket proxy, otherwise <code>false</code>.
      *  
-     *  @since 1.7.12
+     *  @since 1.8.13
      */
-    public boolean isUseRelativeURIsWithSSLProxies() {
-        return useRelativeURIsWithSSLProxies;
+    public boolean isUseRelativeURIsWithConnectProxies() {
+        return useRelativeURIsWithConnectProxies;
     }
 
     /**
@@ -538,7 +539,7 @@ public class AsyncHttpClientConfig {
         private int pooledConnectionIdleTimeout = defaultPooledConnectionIdleTimeout();
         private int connectionTTL = defaultConnectionTTL();
         private SSLContext sslContext;
-        private HostnameVerifier hostnameVerifier = defaultHostnameVerifier();
+        private HostnameVerifier hostnameVerifier;
         private boolean acceptAnyCertificate = defaultAcceptAnyCertificate();
         private boolean followRedirect = defaultFollowRedirect();
         private int maxRedirects = defaultMaxRedirects();
@@ -547,8 +548,8 @@ public class AsyncHttpClientConfig {
         private ProxyServerSelector proxyServerSelector = null;
         private boolean useProxySelector = defaultUseProxySelector();
         private boolean useProxyProperties = defaultUseProxyProperties();
-        private boolean useRelativeURIsWithSSLProxies = defaultUseRelativeURIsWithSSLProxies();
-        private boolean compressionEnabled = defaultCompressionEnabled();
+        private boolean useRelativeURIsWithConnectProxies = defaultUseRelativeURIsWithConnectProxies();
+        private boolean compressionEnforced = defaultCompressionEnforced();
         private String userAgent = defaultUserAgent();
         private ExecutorService applicationThreadPool;
         private Realm realm;
@@ -674,13 +675,13 @@ public class AsyncHttpClientConfig {
         }
 
         /**
-         * Enable HTTP compression.
+         * Enforce HTTP compression.
          *
-         * @param compressionEnabled true if compression is enabled
+         * @param compressionEnabled true if compression is enforced
          * @return a {@link Builder}
          */
-        public Builder setCompressionEnabled(boolean compressionEnabled) {
-            this.compressionEnabled = compressionEnabled;
+        public Builder setCompressionEnforced(boolean compressionEnforced) {
+            this.compressionEnforced = compressionEnforced;
             return this;
         }
 
@@ -961,15 +962,15 @@ public class AsyncHttpClientConfig {
         }
 
         /**
-         * Configures this AHC instance to use relative URIs instead of absolute ones when talking with a SSL proxy.
+         * Configures this AHC instance to use relative URIs instead of absolute ones when talking with a SSL or WebSocket proxy.
          *
-         * @param useRelativeURIsWithSSLProxies
+         * @param useRelativeURIsWithConnectProxies
          * @return this
          *
          * @since 1.7.2
          */
-        public Builder setUseRelativeURIsWithSSLProxies(boolean useRelativeURIsWithSSLProxies) {
-            this.useRelativeURIsWithSSLProxies = useRelativeURIsWithSSLProxies;
+        public Builder setUseRelativeURIsWithConnectProxies(boolean useRelativeURIsWithConnectProxies) {
+            this.useRelativeURIsWithConnectProxies = useRelativeURIsWithConnectProxies;
             return this;
         }
 
@@ -1049,7 +1050,7 @@ public class AsyncHttpClientConfig {
             sslContext = prototype.getSSLContext();
             userAgent = prototype.getUserAgent();
             followRedirect = prototype.isFollowRedirect();
-            compressionEnabled = prototype.isCompressionEnabled();
+            compressionEnforced = prototype.isCompressionEnforced();
             applicationThreadPool = prototype.executorService();
 
             requestFilters.clear();
@@ -1082,17 +1083,19 @@ public class AsyncHttpClientConfig {
          */
         public AsyncHttpClientConfig build() {
 
-            if (proxyServerSelector == null && useProxySelector) {
+            if (proxyServerSelector == null && useProxySelector)
                 proxyServerSelector = ProxyUtils.getJdkDefaultProxyServerSelector();
-            }
 
-            if (proxyServerSelector == null && useProxyProperties) {
+            if (proxyServerSelector == null && useProxyProperties)
                 proxyServerSelector = ProxyUtils.createProxyServerSelector(System.getProperties());
-            }
 
-            if (proxyServerSelector == null) {
+            if (proxyServerSelector == null)
                 proxyServerSelector = ProxyServerSelector.NO_PROXY_SELECTOR;
-            }
+
+            if (acceptAnyCertificate)
+                hostnameVerifier = null;
+            else if (hostnameVerifier == null)
+                hostnameVerifier = new DefaultHostnameVerifier();
 
             return new AsyncHttpClientConfig(connectionTimeout,//
                     maxConnections,//
@@ -1113,8 +1116,8 @@ public class AsyncHttpClientConfig {
                     strict302Handling, //
                     applicationThreadPool, //
                     proxyServerSelector, //
-                    useRelativeURIsWithSSLProxies, //
-                    compressionEnabled, //
+                    useRelativeURIsWithConnectProxies, //
+                    compressionEnforced, //
                     userAgent,//
                     realm,//
                     requestFilters, //

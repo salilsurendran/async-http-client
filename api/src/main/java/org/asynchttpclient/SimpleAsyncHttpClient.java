@@ -12,17 +12,7 @@
  */
 package org.asynchttpclient;
 
-import org.asynchttpclient.cookie.Cookie;
-import org.asynchttpclient.multipart.Part;
-import org.asynchttpclient.resumable.ResumableAsyncHandler;
-import org.asynchttpclient.resumable.ResumableIOExceptionFilter;
-import org.asynchttpclient.simple.HeaderMap;
-import org.asynchttpclient.simple.SimpleAHCTransferListener;
-import org.asynchttpclient.uri.UriComponents;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.net.ssl.SSLContext;
+import static org.asynchttpclient.util.MiscUtils.closeSilently;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -31,6 +21,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+
+import javax.net.ssl.SSLContext;
+
+import org.asynchttpclient.cookie.Cookie;
+import org.asynchttpclient.multipart.Part;
+import org.asynchttpclient.resumable.ResumableAsyncHandler;
+import org.asynchttpclient.resumable.ResumableIOExceptionFilter;
+import org.asynchttpclient.simple.HeaderMap;
+import org.asynchttpclient.simple.SimpleAHCTransferListener;
+import org.asynchttpclient.uri.Uri;
 
 /**
  * Simple implementation of {@link AsyncHttpClient} and it's related builders ({@link AsyncHttpClientConfig},
@@ -64,7 +64,6 @@ import java.util.concurrent.Future;
  */
 public class SimpleAsyncHttpClient implements Closeable {
 
-    private final static Logger logger = LoggerFactory.getLogger(SimpleAsyncHttpClient.class);
     private final AsyncHttpClientConfig config;
     private final RequestBuilder requestBuilder;
     private AsyncHttpClient asyncHttpClient;
@@ -283,7 +282,7 @@ public class SimpleAsyncHttpClient implements Closeable {
 
         Request request = rb.build();
         ProgressAsyncHandler<Response> handler = new BodyConsumerAsyncHandler(bodyConsumer, throwableHandler, errorDocumentBehaviour,
-                request.getURI(), listener);
+                request.getUri(), listener);
 
         if (resumeEnabled && request.getMethod().equals("GET") && bodyConsumer != null && bodyConsumer instanceof ResumableBodyConsumer) {
             ResumableBodyConsumer fileBodyConsumer = (ResumableBodyConsumer) bodyConsumer;
@@ -529,8 +528,8 @@ public class SimpleAsyncHttpClient implements Closeable {
             return this;
         }
 
-        public Builder setCompressionEnabled(boolean compressionEnabled) {
-            configBuilder.setCompressionEnabled(compressionEnabled);
+        public Builder setCompressionEnforced(boolean compressionEnforced) {
+            configBuilder.setCompressionEnforced(compressionEnforced);
             return this;
         }
 
@@ -720,7 +719,7 @@ public class SimpleAsyncHttpClient implements Closeable {
         private final BodyConsumer bodyConsumer;
         private final ThrowableHandler exceptionHandler;
         private final ErrorDocumentBehaviour errorDocumentBehaviour;
-        private final UriComponents uri;
+        private final Uri uri;
         private final SimpleAHCTransferListener listener;
 
         private boolean accumulateBody = false;
@@ -729,7 +728,7 @@ public class SimpleAsyncHttpClient implements Closeable {
         private long total = -1;
 
         public BodyConsumerAsyncHandler(BodyConsumer bodyConsumer, ThrowableHandler exceptionHandler,
-                ErrorDocumentBehaviour errorDocumentBehaviour, UriComponents uri, SimpleAHCTransferListener listener) {
+                ErrorDocumentBehaviour errorDocumentBehaviour, Uri uri, SimpleAHCTransferListener listener) {
             this.bodyConsumer = bodyConsumer;
             this.exceptionHandler = exceptionHandler;
             this.errorDocumentBehaviour = errorDocumentBehaviour;
@@ -778,13 +777,8 @@ public class SimpleAsyncHttpClient implements Closeable {
         }
 
         private void closeConsumer() {
-            try {
-                if (bodyConsumer != null) {
-                    bodyConsumer.close();
-                }
-            } catch (IOException ex) {
-                logger.warn("Unable to close a BodyConsumer {}", bodyConsumer);
-            }
+            if (bodyConsumer != null)
+                closeSilently(bodyConsumer);
         }
 
         @Override
@@ -857,7 +851,7 @@ public class SimpleAsyncHttpClient implements Closeable {
             }
         }
 
-        private void fireSent(UriComponents uri, long amount, long current, long total) {
+        private void fireSent(Uri uri, long amount, long current, long total) {
             if (listener != null) {
                 listener.onBytesSent(uri, amount, current, total);
             }

@@ -1,34 +1,33 @@
 /*
- * Copyright 2010-2013 Ning, Inc.
+ * Copyright (c) 2014 AsyncHttpClient Project. All rights reserved.
  *
- * Ning licenses this file to you under the Apache License, version 2.0
- * (the "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at:
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at
+ *     http://www.apache.org/licenses/LICENSE-2.0.
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
- * License for the specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
 package org.asynchttpclient.providers.netty.request;
-
-import org.asynchttpclient.AsyncHandler;
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.asynchttpclient.ProgressAsyncHandler;
-import org.asynchttpclient.Realm;
-import org.asynchttpclient.providers.netty.future.NettyResponseFuture;
-import org.asynchttpclient.providers.netty.future.StackTraceInspector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelProgressiveFuture;
 import io.netty.channel.ChannelProgressiveFutureListener;
 
 import java.nio.channels.ClosedChannelException;
+
+import org.asynchttpclient.AsyncHandler;
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.ProgressAsyncHandler;
+import org.asynchttpclient.Realm;
+import org.asynchttpclient.providers.netty.channel.Channels;
+import org.asynchttpclient.providers.netty.future.NettyResponseFuture;
+import org.asynchttpclient.providers.netty.future.StackTraceInspector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ProgressListener implements ChannelProgressiveFutureListener {
 
@@ -41,8 +40,11 @@ public class ProgressListener implements ChannelProgressiveFutureListener {
     private final long expectedTotal;
     private long lastProgress = 0L;
 
-    public ProgressListener(AsyncHttpClientConfig config, AsyncHandler<?> asyncHandler, NettyResponseFuture<?> future,
-            boolean notifyHeaders, long expectedTotal) {
+    public ProgressListener(AsyncHttpClientConfig config,//
+            AsyncHandler<?> asyncHandler,//
+            NettyResponseFuture<?> future,//
+            boolean notifyHeaders,//
+            long expectedTotal) {
         this.config = config;
         this.asyncHandler = asyncHandler;
         this.future = future;
@@ -53,28 +55,17 @@ public class ProgressListener implements ChannelProgressiveFutureListener {
     private boolean abortOnThrowable(Throwable cause, Channel channel) {
 
         if (cause != null && future.getState() != NettyResponseFuture.STATE.NEW) {
-
             if (cause instanceof IllegalStateException) {
                 LOGGER.debug(cause.getMessage(), cause);
-                try {
-                    channel.close();
-                } catch (RuntimeException ex) {
-                    LOGGER.debug(ex.getMessage(), ex);
-                }
+                Channels.silentlyCloseChannel(channel);
+
             } else if (cause instanceof ClosedChannelException || StackTraceInspector.abortOnReadOrWriteException(cause)) {
-
-                if (LOGGER.isDebugEnabled())
-                    LOGGER.debug(cause.getMessage(), cause);
-
-                try {
-                    channel.close();
-                } catch (RuntimeException ex) {
-                    LOGGER.debug(ex.getMessage(), ex);
-                }
+                LOGGER.debug(cause.getMessage(), cause);
+                Channels.silentlyCloseChannel(channel);
+                
             } else {
                 future.abort(cause);
             }
-
             return true;
         }
 
@@ -85,15 +76,15 @@ public class ProgressListener implements ChannelProgressiveFutureListener {
     public void operationComplete(ChannelProgressiveFuture cf) {
         // The write operation failed. If the channel was cached, it means it got asynchronously closed.
         // Let's retry a second time.
-
         if (!abortOnThrowable(cf.cause(), cf.channel())) {
 
             future.touch();
 
             /**
-             * We need to make sure we aren't in the middle of an authorization process before publishing events as we
-             * will re-publish again the same event after the authorization,
-             * causing unpredictable behavior.
+             * We need to make sure we aren't in the middle of an authorization
+             * process before publishing events as we will re-publish again the
+             * same event after the authorization, causing unpredictable
+             * behavior.
              */
             Realm realm = future.getRequest().getRealm() != null ? future.getRequest().getRealm() : config.getRealm();
             boolean startPublishing = future.isInAuth() || realm == null || realm.getUsePreemptiveAuth();

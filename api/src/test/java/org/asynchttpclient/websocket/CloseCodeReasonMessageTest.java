@@ -109,14 +109,10 @@ public abstract class CloseCodeReasonMessageTest extends AbstractBasicTest {
             final CountDownLatch latch = new CountDownLatch(1);
             final AtomicReference<Throwable> throwable = new AtomicReference<Throwable>();
 
-            WebSocket websocket = c.prepareGet("http://apache.org").execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new WebSocketTextListener() {
+            c.prepareGet("http://apache.org").execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new WebSocketTextListener() {
 
                 @Override
                 public void onMessage(String message) {
-                }
-
-                @Override
-                public void onFragment(String fragment, boolean last) {
                 }
 
                 @Override
@@ -149,14 +145,10 @@ public abstract class CloseCodeReasonMessageTest extends AbstractBasicTest {
             final CountDownLatch latch = new CountDownLatch(1);
             final AtomicReference<Throwable> throwable = new AtomicReference<Throwable>();
 
-            WebSocket websocket = c.prepareGet("ws://www.google.com").execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new WebSocketTextListener() {
+            c.prepareGet("ws://www.google.com").execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new WebSocketTextListener() {
 
                 @Override
                 public void onMessage(String message) {
-                }
-
-                @Override
-                public void onFragment(String fragment, boolean last) {
                 }
 
                 @Override

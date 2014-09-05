@@ -10,7 +10,7 @@ Async Http Client library purpose is to allow Java applications to easily execut
 <dependency>
   <groupId>com.ning</groupId>
   <artifactId>async-http-client</artifactId>
-  <version>1.8.12</version>
+  <version>1.8.13</version>
 </dependency>
 ```
 
@@ -158,7 +158,7 @@ WebSocket websocket = c.prepareGet(getTargetUrl())
 
           @Override
           public void onOpen(WebSocket websocket) {
-              websocket.sendTextMessage("...").sendBinaryMessage("...");
+              websocket.sendTextMessage("...").sendMessage("...");
           }
 
           @Override

@@ -14,16 +14,15 @@ package org.asynchttpclient.util;
 
 import static org.asynchttpclient.util.MiscUtils.isNonEmpty;
 
-import org.asynchttpclient.AsyncHttpClientConfig;
-import org.asynchttpclient.AsyncHttpProvider;
-import org.asynchttpclient.HttpResponseBodyPart;
-import org.asynchttpclient.Request;
-import org.asynchttpclient.uri.UriComponents;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.List;
+
+import org.asynchttpclient.AsyncHttpClientConfig;
+import org.asynchttpclient.HttpResponseBodyPart;
+import org.asynchttpclient.Request;
+import org.asynchttpclient.uri.Uri;
 
 /**
  * {@link org.asynchttpclient.AsyncHttpProvider} common utilities.
@@ -40,7 +39,7 @@ public class AsyncHttpProviderUtils {
 
     public final static Charset DEFAULT_CHARSET = StandardCharsets.ISO_8859_1;
 
-    public static final void validateSupportedScheme(UriComponents uri) {
+    public static final void validateSupportedScheme(Uri uri) {
         final String scheme = uri.getScheme();
         if (scheme == null || !scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https") && !scheme.equalsIgnoreCase("ws")
                 && !scheme.equalsIgnoreCase("wss")) {
@@ -88,16 +87,16 @@ public class AsyncHttpProviderUtils {
         return result;
     }
 
-    public final static String getBaseUrl(UriComponents uri) {
+    public final static String getBaseUrl(Uri uri) {
         return uri.getScheme() + "://" + getAuthority(uri);
     }
 
-    public final static String getAuthority(UriComponents uri) {
+    public final static String getAuthority(Uri uri) {
         int port = uri.getPort() != -1? uri.getPort() : getDefaultPort(uri);
         return uri.getHost() + ":" + port;
     }
 
-    public final static int getDefaultPort(UriComponents uri) {
+    public final static int getDefaultPort(Uri uri) {
         int port = uri.getPort();
         if (port == -1)
             port = uri.getScheme().equals("http") || uri.getScheme().equals("ws") ? 80 : 443;
@@ -109,14 +108,8 @@ public class AsyncHttpProviderUtils {
      * 
      * @return the raw path or "/" if it's null
      */
-    public final static String getNonEmptyPath(UriComponents uri) {
+    public final static String getNonEmptyPath(Uri uri) {
         return isNonEmpty(uri.getPath()) ? uri.getPath() : "/";
-    }
-
-    public static String constructUserAgent(Class<? extends AsyncHttpProvider> httpProvider, AsyncHttpClientConfig config) {
-        return new StringBuilder("AHC (").append(httpProvider.getSimpleName()).append(" - ").append(System.getProperty("os.name"))
-                .append(" - ").append(System.getProperty("os.version")).append(" - ").append(System.getProperty("java.version"))
-                .append(" - ").append(Runtime.getRuntime().availableProcessors()).append(" core(s))").toString();
     }
 
     public static String parseCharset(String contentType) {

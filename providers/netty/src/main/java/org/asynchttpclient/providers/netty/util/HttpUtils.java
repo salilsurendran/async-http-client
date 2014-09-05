@@ -16,16 +16,16 @@ import static org.asynchttpclient.util.MiscUtils.isNonEmpty;
 
 import java.util.List;
 
-import org.asynchttpclient.uri.UriComponents;
+import org.asynchttpclient.uri.Uri;
 
-public final class HttpUtil {
+public final class HttpUtils {
 
     public static final String HTTPS = "https";
     public static final String HTTP = "http";
     public static final String WEBSOCKET = "ws";
     public static final String WEBSOCKET_SSL = "wss";
 
-    private HttpUtil() {
+    private HttpUtils() {
     }
 
     public static boolean isNTLM(List<String> auth) {
@@ -33,14 +33,18 @@ public final class HttpUtil {
     }
 
     public static boolean isWebSocket(String scheme) {
-        return WEBSOCKET.equalsIgnoreCase(scheme) || WEBSOCKET_SSL.equalsIgnoreCase(scheme);
+        return WEBSOCKET.equals(scheme) || WEBSOCKET_SSL.equals(scheme);
     }
 
     public static boolean isSecure(String scheme) {
-        return HTTPS.equalsIgnoreCase(scheme) || WEBSOCKET_SSL.equalsIgnoreCase(scheme);
+        return HTTPS.equals(scheme) || WEBSOCKET_SSL.equals(scheme);
     }
 
-    public static boolean isSecure(UriComponents uri) {
+    public static boolean isSecure(Uri uri) {
         return isSecure(uri.getScheme());
+    }
+
+    public static boolean useProxyConnect(Uri uri) {
+        return isSecure(uri) || isWebSocket(uri.getScheme());
     }
 }

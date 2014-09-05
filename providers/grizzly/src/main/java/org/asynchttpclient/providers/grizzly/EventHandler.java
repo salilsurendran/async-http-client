@@ -34,7 +34,7 @@ import org.asynchttpclient.providers.grizzly.statushandler.ProxyAuthorizationHan
 import org.asynchttpclient.providers.grizzly.statushandler.RedirectHandler;
 import org.asynchttpclient.providers.grizzly.statushandler.StatusHandler;
 import org.asynchttpclient.providers.grizzly.websocket.GrizzlyWebSocketAdapter;
-import org.asynchttpclient.uri.UriComponents;
+import org.asynchttpclient.uri.Uri;
 import org.asynchttpclient.websocket.WebSocketUpgradeHandler;
 import org.glassfish.grizzly.Connection;
 import org.glassfish.grizzly.filterchain.FilterChainContext;
@@ -169,7 +169,7 @@ public final class EventHandler {
         }
         final GrizzlyResponseStatus responseStatus =
                 new GrizzlyResponseStatus((HttpResponsePacket) httpHeader,
-                        context.getRequest().getURI(), config);
+                        context.getRequest().getUri(), config);
         context.setResponseStatus(responseStatus);
         if (context.getStatusHandler() != null) {
             return;
@@ -185,7 +185,7 @@ public final class EventHandler {
                         try {
                             context.result(handler.onCompleted());
                             context.done();
-                        } catch (Exception e) {
+                        } catch (Throwable e) {
                             context.abort(e);
                         }
                     }
@@ -289,7 +289,7 @@ public final class EventHandler {
                             "WebSocket protocol error: unexpected HTTP response status during handshake.");
                     context.result(null);
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 httpHeader.setSkipRemainder(true);
                 context.abort(e);
             }
@@ -341,7 +341,7 @@ public final class EventHandler {
         if (handler != null) {
             try {
                 context.result(handler.onCompleted());
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 context.abort(e);
             }
         } else {
@@ -421,7 +421,7 @@ public final class EventHandler {
 
     // ----------------------------------------------------- Private Methods
 
-    public static Request newRequest(final UriComponents uri, final HttpResponsePacket response, final HttpTxContext ctx, boolean asGet) {
+    public static Request newRequest(final Uri uri, final HttpResponsePacket response, final HttpTxContext ctx, boolean asGet) {
 
         final RequestBuilder builder = new RequestBuilder(ctx.getRequest());
         if (asGet) {

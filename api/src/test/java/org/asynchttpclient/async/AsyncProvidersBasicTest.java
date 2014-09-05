@@ -73,7 +73,7 @@ public abstract class AsyncProvidersBasicTest extends AbstractBasicTest {
         AsyncHttpClient client = getAsyncHttpClient(null);
         try {
             Request request = new RequestBuilder("GET").setUrl(getTargetUrl() + "?q=+%20x").build();
-            assertEquals(request.getURI().toUrl(), getTargetUrl() + "?q=%20%20x");
+            assertEquals(request.getUrl(), getTargetUrl() + "?q=%20%20x");
 
             String url = client.executeRequest(request, new AsyncCompletionHandler<String>() {
                 @Override
@@ -659,7 +659,7 @@ public abstract class AsyncProvidersBasicTest extends AbstractBasicTest {
         try {
             final CountDownLatch l = new CountDownLatch(1);
 
-            Part p = new StringPart("foo", "bar", StandardCharsets.UTF_8.name());
+            Part p = new StringPart("foo", "bar", StandardCharsets.UTF_8);
 
             client.preparePost(getTargetUrl()).addBodyPart(p).execute(new AsyncCompletionHandlerAdapter() {
 
@@ -687,7 +687,7 @@ public abstract class AsyncProvidersBasicTest extends AbstractBasicTest {
     
     @Test(groups = { "standalone", "default_provider", "async" })
     public void asyncDoPostBasicGZIPTest() throws Exception {
-        AsyncHttpClient client = getAsyncHttpClient(new AsyncHttpClientConfig.Builder().setCompressionEnabled(true).build());
+        AsyncHttpClient client = getAsyncHttpClient(new AsyncHttpClientConfig.Builder().build());
         try {
             final CountDownLatch l = new CountDownLatch(1);
             FluentCaseInsensitiveStringsMap h = new FluentCaseInsensitiveStringsMap();

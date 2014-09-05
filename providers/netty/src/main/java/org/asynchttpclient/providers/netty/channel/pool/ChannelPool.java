@@ -1,18 +1,15 @@
 /*
- * Copyright 2010 Ning, Inc.
+ * Copyright (c) 2014 AsyncHttpClient Project. All rights reserved.
  *
- * Ning licenses this file to you under the Apache License, version 2.0
- * (the "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at:
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at
+ *     http://www.apache.org/licenses/LICENSE-2.0.
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
- * License for the specific language governing permissions and limitations
- * under the License.
- *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
 package org.asynchttpclient.providers.netty.channel.pool;
 
@@ -23,19 +20,19 @@ public interface ChannelPool {
     /**
      * Add a channel to the pool
      * 
-     * @param poolKey a key used to retrieve the cached channel
+     * @param partitionId a key used to retrieve the cached channel
      * @param channel an I/O channel
      * @return true if added.
      */
-    boolean offer(Channel channel, String poolKey);
+    boolean offer(Channel channel, String partitionId);
 
     /**
      * Remove the channel associated with the uri.
      * 
-     * @param uri the uri used when invoking addConnection
+     * @param partitionId the partition used when invoking offer
      * @return the channel associated with the uri
      */
-    Channel poll(String uri);
+    Channel poll(String partitionId);
 
     /**
      * Remove all channels from the cache. A channel might have been associated with several uri.
@@ -57,4 +54,18 @@ public interface ChannelPool {
      * Destroy all channels that has been cached by this instance.
      */
     void destroy();
+
+    /**
+     * Flush a partition
+     * 
+     * @param partitionId
+     */
+    void flushPartition(String partitionId);
+
+    /**
+     * Flush partitions based on a selector
+     * 
+     * @param selector
+     */
+    void flushPartitions(ChannelPoolPartitionSelector selector);
 }

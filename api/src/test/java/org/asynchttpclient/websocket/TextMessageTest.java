@@ -185,10 +185,6 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
 
                 @Override
-                public void onFragment(String fragment, boolean last) {
-                }
-
-                @Override
                 public void onOpen(WebSocket websocket) {
                 }
 
@@ -204,7 +200,7 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
             }).build()).get();
 
-            websocket.sendTextMessage("ECHO");
+            websocket.sendMessage("ECHO");
 
             latch.await();
             assertEquals(text.get(), "ECHO");
@@ -226,10 +222,6 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 public void onMessage(String message) {
                     text.set(message);
                     latch.countDown();
-                }
-
-                @Override
-                public void onFragment(String fragment, boolean last) {
                 }
 
                 @Override
@@ -255,10 +247,6 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
 
                 @Override
-                public void onFragment(String fragment, boolean last) {
-                }
-
-                @Override
                 public void onOpen(WebSocket websocket) {
                 }
 
@@ -274,7 +262,7 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
             }).build()).get();
 
-            websocket.sendTextMessage("ECHO");
+            websocket.sendMessage("ECHO");
 
             latch.await();
             assertEquals(text.get(), "ECHOECHO");
@@ -299,12 +287,8 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
 
                 @Override
-                public void onFragment(String fragment, boolean last) {
-                }
-
-                @Override
                 public void onOpen(WebSocket websocket) {
-                    websocket.sendTextMessage("ECHO").sendTextMessage("ECHO");
+                    websocket.sendMessage("ECHO").sendMessage("ECHO");
                 }
 
                 @Override
@@ -341,10 +325,6 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
 
                 @Override
-                public void onFragment(String fragment, boolean last) {
-                }
-
-                @Override
                 public void onOpen(WebSocket websocket) {
                 }
 
@@ -360,8 +340,8 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
             }).build()).get();
 
-            websocket.streamText("ECHO", false);
-            websocket.streamText("ECHO", true);
+            websocket.stream("ECHO", false);
+            websocket.stream("ECHO", true);
 
             latch.await();
             assertEquals(text.get(), "ECHOECHO");
@@ -387,10 +367,6 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
 
                 @Override
-                public void onFragment(String fragment, boolean last) {
-                }
-
-                @Override
                 public void onOpen(WebSocket websocket) {
                 }
 
@@ -406,10 +382,10 @@ public abstract class TextMessageTest extends AbstractBasicTest {
                 }
             }).build()).get();
 
-            websocket.sendTextMessage("ECHO");
+            websocket.sendMessage("ECHO");
             textLatch.await();
 
-            websocket.sendTextMessage("CLOSE");
+            websocket.sendMessage("CLOSE");
             closeLatch.await();
 
             assertEquals(text.get(), "ECHO");

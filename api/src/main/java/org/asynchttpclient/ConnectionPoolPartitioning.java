@@ -15,9 +15,9 @@
  */
 package org.asynchttpclient;
 
-import org.asynchttpclient.uri.UriComponents;
+import org.asynchttpclient.uri.Uri;
 
-public interface ConnectionPoolKeyStrategy {
+public interface ConnectionPoolPartitioning {
 
-    String getKey(UriComponents uri, ProxyServer proxy);
+    String getPartitionId(Uri uri, ProxyServer proxy);
 }

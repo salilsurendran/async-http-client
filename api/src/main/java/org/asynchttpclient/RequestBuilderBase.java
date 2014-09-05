@@ -19,7 +19,7 @@ import static org.asynchttpclient.util.MiscUtils.isNonEmpty;
 
 import org.asynchttpclient.cookie.Cookie;
 import org.asynchttpclient.multipart.Part;
-import org.asynchttpclient.uri.UriComponents;
+import org.asynchttpclient.uri.Uri;
 import org.asynchttpclient.util.AsyncHttpProviderUtils;
 import org.asynchttpclient.util.QueryComputer;
 import org.slf4j.Logger;
@@ -42,11 +42,11 @@ import java.util.Map;
 public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
     private final static Logger logger = LoggerFactory.getLogger(RequestBuilderBase.class);
 
-    private static final UriComponents DEFAULT_REQUEST_URL = UriComponents.create("http://localhost");
+    private static final Uri DEFAULT_REQUEST_URL = Uri.create("http://localhost");
 
     private static final class RequestImpl implements Request {
         private String method;
-        private UriComponents uri;
+        private Uri uri;
         private InetAddress address;
         private InetAddress localAddress;
         private FluentCaseInsensitiveStringsMap headers = new FluentCaseInsensitiveStringsMap();
@@ -66,7 +66,7 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
         private int requestTimeoutInMs;
         private long rangeOffset;
         public String charset;
-        private ConnectionPoolKeyStrategy connectionPoolKeyStrategy = DefaultConnectionPoolStrategy.INSTANCE;
+        private ConnectionPoolPartitioning connectionPoolPartitioning = PerHostConnectionPoolPartitioning.INSTANCE;
         private List<Param> queryParams;
 
         public RequestImpl() {
@@ -75,7 +75,7 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
         public RequestImpl(Request prototype) {
             if (prototype != null) {
                 this.method = prototype.getMethod();
-                this.uri = prototype.getURI();
+                this.uri = prototype.getUri();
                 this.address = prototype.getInetAddress();
                 this.localAddress = prototype.getLocalAddress();
                 this.headers = new FluentCaseInsensitiveStringsMap(prototype.getHeaders());
@@ -95,8 +95,13 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
                 this.requestTimeoutInMs = prototype.getRequestTimeoutInMs();
                 this.rangeOffset = prototype.getRangeOffset();
                 this.charset = prototype.getBodyEncoding();
-                this.connectionPoolKeyStrategy = prototype.getConnectionPoolKeyStrategy();
+                this.connectionPoolPartitioning = prototype.getConnectionPoolPartitioning();
             }
+        }
+
+        @Override
+        public String getUrl() {
+            return uri.toUrl();
         }
 
         @Override
@@ -115,7 +120,7 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
         }
 
         @Override
-        public UriComponents getURI() {
+        public Uri getUri() {
             return uri;
         }
 
@@ -205,8 +210,8 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
         }
 
         @Override
-        public ConnectionPoolKeyStrategy getConnectionPoolKeyStrategy() {
-            return connectionPoolKeyStrategy;
+        public ConnectionPoolPartitioning getConnectionPoolPartitioning() {
+            return connectionPoolPartitioning;
         }
 
         @Override
@@ -229,7 +234,7 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
 
         @Override
         public String toString() {
-            StringBuilder sb = new StringBuilder(getURI().toUrl());
+            StringBuilder sb = new StringBuilder(getUrl());
 
             sb.append("\t");
             sb.append(method);
@@ -284,10 +289,10 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
     }
     
     public T setUrl(String url) {
-        return setURI(UriComponents.create(url));
+        return setUri(Uri.create(url));
     }
 
-    public T setURI(UriComponents uri) {
+    public T setUri(Uri uri) {
         request.uri = uri;
         return derived.cast(this);
     }
@@ -308,7 +313,7 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
     }
 
     public T setHeader(String name, String value) {
-        request.headers.replace(name, value);
+        request.headers.replaceWith(name, value);
         return derived.cast(this);
     }
 
@@ -531,8 +536,8 @@ public abstract class RequestBuilderBase<T extends RequestBuilderBase<T>> {
         return derived.cast(this);
     }
 
-    public T setConnectionPoolKeyStrategy(ConnectionPoolKeyStrategy connectionPoolKeyStrategy) {
-        request.connectionPoolKeyStrategy = connectionPoolKeyStrategy;
+    public T setConnectionPoolPartitioning(ConnectionPoolPartitioning connectionPoolPartitioning) {
+        request.connectionPoolPartitioning = connectionPoolPartitioning;
         return derived.cast(this);
     }
 

@@ -44,7 +44,7 @@ import org.asynchttpclient.providers.grizzly.bodyhandler.ExpectHandler;
 import org.asynchttpclient.providers.grizzly.filters.events.ContinueEvent;
 import org.asynchttpclient.providers.grizzly.filters.events.SSLSwitchingEvent;
 import org.asynchttpclient.providers.grizzly.filters.events.TunnelRequestEvent;
-import org.asynchttpclient.uri.UriComponents;
+import org.asynchttpclient.uri.Uri;
 import org.glassfish.grizzly.Buffer;
 import org.glassfish.grizzly.Connection;
 import org.glassfish.grizzly.Grizzly;
@@ -155,7 +155,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
             ctx.suspend();
             TunnelRequestEvent tunnelRequestEvent = (TunnelRequestEvent) event;
             final ProxyServer proxyServer = tunnelRequestEvent.getProxyServer();
-            final UriComponents requestUri = tunnelRequestEvent.getUri();
+            final Uri requestUri = tunnelRequestEvent.getUri();
 
             RequestBuilder builder = new RequestBuilder();
             builder.setMethod(Method.CONNECT.getMethodString());
@@ -208,8 +208,9 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         }
 
         final Request request = httpTxContext.getRequest();
-        final UriComponents uri = request.getURI();
+        final Uri uri = request.getUri();
         boolean secure = Utils.isSecure(uri);
+        boolean isWebSocket = isWSRequest(httpTxContext.getRequestUri());
 
         // If the request is secure, check to see if an error occurred during
         // the handshake. We have to do this here, as the error would occur
@@ -219,7 +220,8 @@ public final class AsyncHttpClientFilter extends BaseFilter {
             return true;
         }
 
-        if (isUpgradeRequest(httpTxContext.getHandler()) && isWSRequest(httpTxContext.getRequestUri())) {
+        
+        if (isUpgradeRequest(httpTxContext.getHandler()) && isWebSocket) {
             httpTxContext.setWSRequest(true);
             convertToUpgradeRequest(httpTxContext);
         }
@@ -238,8 +240,10 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         if (method == Method.CONNECT) {
             final int port = uri.getPort();
             requestPacket.setRequestURI(uri.getHost() + ':' + (port == -1 ? 443 : port));
-        } else {
+        } else if ((secure || isWebSocket) && config.isUseRelativeURIsWithConnectProxies()) {
             requestPacket.setRequestURI(getNonEmptyPath(uri));
+        } else {
+            requestPacket.setRequestURI(uri.toUrl());
         }
 
         final BodyHandler bodyHandler = isPayloadAllowed(method) ?
@@ -258,7 +262,7 @@ public final class AsyncHttpClientFilter extends BaseFilter {
 
         if (httpTxContext.isWSRequest()) {
             try {
-                final URI wsURI = httpTxContext.getWsRequestURI().toURI();
+                final URI wsURI = httpTxContext.getWsRequestURI().toJavaNetURI();
                 httpTxContext.setProtocolHandler(Version.RFC6455.createHandler(true));
                 httpTxContext.setHandshake(httpTxContext.getProtocolHandler().createHandShake(wsURI));
                 requestPacket = (HttpRequestPacket) httpTxContext.getHandshake().composeHeaders().getHttpHeader();
@@ -416,15 +420,18 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         return newFilterChainContext;
     }
 
-    private static void addHostHeader(final Request request, final UriComponents uri, final HttpRequestPacket requestPacket) {
-        String host = request.getVirtualHost();
-        if (host != null) {
-            requestPacket.addHeader(Header.Host, host);
-        } else {
-            if (uri.getPort() == -1) {
-                requestPacket.addHeader(Header.Host, uri.getHost());
+    private static void addHostHeader(final Request request,
+            final Uri uri, final HttpRequestPacket requestPacket) {
+        if (!request.getHeaders().containsKey(Header.Host.toString())) {
+            String host = request.getVirtualHost();
+            if (host != null) {
+                requestPacket.addHeader(Header.Host, host);
             } else {
-                requestPacket.addHeader(Header.Host, uri.getHost() + ':' + uri.getPort());
+                if (uri.getPort() == -1) {
+                    requestPacket.addHeader(Header.Host, uri.getHost());
+                } else {
+                    requestPacket.addHeader(Header.Host, uri.getHost() + ':' + uri.getPort());
+                }
             }
         }
     }
@@ -463,13 +470,13 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         return (handler instanceof UpgradeHandler);
     }
 
-    private static boolean isWSRequest(final UriComponents requestUri) {
+    private static boolean isWSRequest(final Uri requestUri) {
         return requestUri.getScheme().startsWith("ws");
     }
 
     private static void convertToUpgradeRequest(final HttpTxContext ctx) {
         
-        final UriComponents requestUri = ctx.getRequestUri();
+        final Uri requestUri = ctx.getRequestUri();
 
         ctx.setWsRequestURI(requestUri);
         ctx.setRequestUri(requestUri.withNewScheme(
@@ -520,24 +527,20 @@ public final class AsyncHttpClientFilter extends BaseFilter {
         }
     }
 
-    private static void convertCookies(final Collection<Cookie> cookies, final org.glassfish.grizzly.http.Cookie[] gCookies) {
+    private static void convertCookies(final Collection<Cookie> cookies,
+            final org.glassfish.grizzly.http.Cookie[] gCookies) {
         int idx = 0;
         if (!cookies.isEmpty()) {
             for (final Cookie cookie : cookies) {
-                final org.glassfish.grizzly.http.Cookie gCookie = new org.glassfish.grizzly.http.Cookie(cookie.getName(), cookie.getValue());
-                gCookie.setDomain(cookie.getDomain());
-                gCookie.setPath(cookie.getPath());
-                gCookie.setMaxAge(cookie.getMaxAge());
-                gCookie.setSecure(cookie.isSecure());
-                gCookies[idx] = gCookie;
-                idx++;
+                gCookies[idx++] = new org.glassfish.grizzly.http.Cookie(
+                        cookie.getName(), cookie.getValue());
             }
         }
     }
 
     private static void addQueryString(final Request request, final HttpRequestPacket requestPacket) {
 
-        String query = request.getURI().getQuery();
+        String query = request.getUri().getQuery();
         if (isNonEmpty(query)) {
             requestPacket.setQueryString(query);
         }

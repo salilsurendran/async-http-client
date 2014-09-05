@@ -12,7 +12,7 @@
  */
 package org.asynchttpclient.providers.netty.response;
 
-import org.asynchttpclient.providers.netty.util.ByteBufUtil;
+import static org.asynchttpclient.providers.netty.util.ByteBufUtils.*;
 
 import io.netty.buffer.ByteBuf;
 
@@ -26,13 +26,13 @@ import java.nio.ByteBuffer;
  * A callback class used when an HTTP response body is received.
  * Bytes are eagerly fetched from the ByteBuf
  */
-public class EagerResponseBodyPart extends NettyResponseBodyPart {
+public class EagerNettyResponseBodyPart extends NettyResponseBodyPart {
 
     private final byte[] bytes;
 
-    public EagerResponseBodyPart(ByteBuf buf, boolean last) {
+    public EagerNettyResponseBodyPart(ByteBuf buf, boolean last) {
         super(last);
-        bytes = ByteBufUtil.byteBuf2Bytes(buf);
+        bytes = byteBuf2Bytes(buf);
     }
 
     /**

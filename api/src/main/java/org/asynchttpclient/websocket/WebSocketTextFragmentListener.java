@@ -11,41 +11,16 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
-package org.asynchttpclient.providers.netty.channel.pool;
+package org.asynchttpclient.websocket;
 
-import io.netty.channel.Channel;
+import org.asynchttpclient.HttpResponseBodyPart;
 
-public class NoopChannelPool implements ChannelPool {
+/**
+ * Invoked when WebSocket text fragments are received.
+ * 
+ * @param fragment text fragment
+ */
+public interface WebSocketTextFragmentListener extends WebSocketListener {
 
-    @Override
-    public boolean offer(Channel channel, String poolKey) {
-        return false;
-    }
-
-    @Override
-    public Channel poll(String poolKey) {
-        return null;
-    }
-
-    @Override
-    public boolean removeAll(Channel channel) {
-        return false;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return true;
-    }
-
-    @Override
-    public void destroy() {
-    }
-
-    @Override
-    public void flushPartition(String partitionId) {
-    }
-
-    @Override
-    public void flushPartitions(ChannelPoolPartitionSelector selector) {
-    }
+    void onFragment(HttpResponseBodyPart fragment);
 }

@@ -25,7 +25,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.asynchttpclient.providers.netty.util;
+package org.asynchttpclient.providers.netty.channel;
 
 import io.netty.channel.Channel;
 import io.netty.channel.group.ChannelGroupFuture;
@@ -89,7 +89,7 @@ public class CleanupChannelGroup extends DefaultChannelGroup {
         try {
             if (this.closed.get()) {
                 // Immediately close channel, as close() was already called.
-                channel.close();
+                Channels.silentlyCloseChannel(channel);
                 return false;
             }
 

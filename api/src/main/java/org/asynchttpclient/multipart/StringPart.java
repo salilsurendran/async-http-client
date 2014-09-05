@@ -18,6 +18,8 @@ import java.io.OutputStream;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
 
+import org.asynchttpclient.util.StandardCharsets;
+
 public class StringPart extends PartBase {
 
     /**
@@ -28,7 +30,7 @@ public class StringPart extends PartBase {
     /**
      * Default charset of string parameters
      */
-    public static final String DEFAULT_CHARSET = "US-ASCII";
+    public static final Charset DEFAULT_CHARSET = StandardCharsets.US_ASCII;
 
     /**
      * Default transfer encoding of string parameters
@@ -40,7 +42,11 @@ public class StringPart extends PartBase {
      */
     private final byte[] content;
 
-    public StringPart(String name, String value, String charset) {
+    private static Charset charsetOrDefault(Charset charset) {
+        return charset == null ? DEFAULT_CHARSET : charset;
+    }
+
+    public StringPart(String name, String value, Charset charset) {
         this(name, value, charset, null);
     }
 
@@ -56,17 +62,15 @@ public class StringPart extends PartBase {
      * @param contentId
      *            the content id
      */
-    public StringPart(String name, String value, String charset, String contentId) {
+    public StringPart(String name, String value, Charset charset, String contentId) {
 
-        super(name, DEFAULT_CONTENT_TYPE, charset == null ? DEFAULT_CHARSET : charset, DEFAULT_TRANSFER_ENCODING, contentId);
-        if (value == null) {
+        super(name, DEFAULT_CONTENT_TYPE, charsetOrDefault(charset), DEFAULT_TRANSFER_ENCODING, contentId);
+        if (value == null)
             throw new NullPointerException("value");
-        }
-        if (value.indexOf(0) != -1) {
+        if (value.indexOf(0) != -1)
             // See RFC 2048, 2.8. "8bit Data"
             throw new IllegalArgumentException("NULs may not be present in string parts");
-        }
-        content = value.getBytes(Charset.forName(charset));
+        content = value.getBytes(charsetOrDefault(charset));
     }
 
     /**

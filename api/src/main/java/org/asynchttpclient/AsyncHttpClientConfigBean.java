@@ -55,17 +55,16 @@ public class AsyncHttpClientConfigBean extends AsyncHttpClientConfig {
         connectionTTL = defaultConnectionTTL();
         followRedirect = defaultFollowRedirect();
         maxRedirects = defaultMaxRedirects();
-        compressionEnabled = defaultCompressionEnabled();
+        compressionEnforced = defaultCompressionEnforced();
         userAgent = defaultUserAgent();
         allowPoolingConnections = defaultAllowPoolingConnections();
-        useRelativeURIsWithSSLProxies = defaultUseRelativeURIsWithSSLProxies();
+        useRelativeURIsWithConnectProxies = defaultUseRelativeURIsWithConnectProxies();
         maxRequestRetry = defaultMaxRequestRetry();
         ioThreadMultiplier = defaultIoThreadMultiplier();
         allowPoolingSslConnections = defaultAllowPoolingSslConnections();
         disableUrlEncodingForBoundRequests = defaultDisableUrlEncodingForBoundRequests();
         removeQueryParamOnRedirect = defaultRemoveQueryParamOnRedirect();
         strict302Handling = defaultStrict302Handling();
-        hostnameVerifier = defaultHostnameVerifier();
         acceptAnyCertificate = defaultAcceptAnyCertificate();
 
         if (defaultUseProxySelector()) {
@@ -139,8 +138,8 @@ public class AsyncHttpClientConfigBean extends AsyncHttpClientConfig {
         return this;
     }
 
-    public AsyncHttpClientConfigBean setCompressionEnabled(boolean compressionEnabled) {
-        this.compressionEnabled = compressionEnabled;
+    public AsyncHttpClientConfigBean setCompressionEnforced(boolean compressionEnforced) {
+        this.compressionEnforced = compressionEnforced;
         return this;
     }
 
